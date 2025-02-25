@@ -9,6 +9,7 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
 	console.log("Servidor en puerto 3000...")
+	console.log("Estas dentro onii-chan >///<")
 });
 
 
