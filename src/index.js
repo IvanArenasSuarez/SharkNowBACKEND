@@ -1,15 +1,21 @@
-import express from 'express'
+import express from 'express';
+import {PORT}from './config.js';
+import cuentaRoutes from './routes/cuenta.routes.js';
+import morgan from 'morgan';
+import cors from "cors";
+
 
 const app = express();
-const port = 3000;
 
-app.get('/', (req, res) => {
-	res.send('<h1>Hola Culeros, aqui el anticristo2007</h1>')
-});
+// Configuración de CORS
 
-app.listen(port, () => {
-	console.log("Servidor en puerto 3000...")
-	console.log("Estas dentro onii-chan >///<")
-});
+app.use(cors());
+app.use(morgan('dev'));
+app.use(express.json());  //middleware para procesar JSON
+app.use(cuentaRoutes);  //Cuentas y login
+
+
+app.listen(PORT);
+console.log('Puerto escuchando en', PORT);
 
 
