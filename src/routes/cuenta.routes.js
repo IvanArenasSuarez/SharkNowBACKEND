@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+
 import { 
     getCuentas,
     getCuenta,
@@ -8,6 +9,11 @@ import {
     putCuenta,
     loginCuenta,
     verifyToken,
+    getRecompensasDesdeDB,
+    guardarAvatarConImagen, 
+    obtenerAvatarSeleccion,
+    obtenerImagenAvatar,   
+ 
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -30,5 +36,13 @@ router.put("/cuenta/:id", putCuenta);
 //Login
 router.post("/login", loginCuenta);
 
+// Obtener recompensas para el avatar
+router.post("/avatar/opciones", getRecompensasDesdeDB);
+
+router.post("/avatar/guardar-imagen", guardarAvatarConImagen);
+
+router.get("/avatar/seleccion", obtenerAvatarSeleccion);
+
+router.get("/avatar/imagen", obtenerImagenAvatar);
 
 export default router;

@@ -1,25 +1,27 @@
 import { pool } from '../db.js';
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-
+import { createCanvas, loadImage } from 'canvas';
+import fetch from 'node-fetch';
 const SECRET_KEY = "secreto_super_seguro"; // Cambia esto <-
 
 // Middleware para verificar el token JWT
 const verifyToken = (req, res, next) => {
-    const token = req.header('Authorization')?.split(' ')[1]; // Obtener el token desde el header
-
+    const token = req.header('Authorization')?.split(' ')[1];
+  
     if (!token) {
-        return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
+      return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
     }
-
+  
     try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        req.userId = decoded.id; // Extraemos el ID del usuario desde el token
-        next(); // Procedemos a la siguiente función
+      const decoded = jwt.verify(token, SECRET_KEY);
+      req.user = decoded; // <- Aquí guardamos todo el objeto del token, no solo el ID
+      next();
     } catch (error) {
-        return res.status(401).json({ message: 'Token no válido.' });
+      return res.status(401).json({ message: 'Token no válido.' });
     }
-};
+  };
+  
 
 
 //GET Cuentas
@@ -100,7 +102,8 @@ console.log("Credenciales: ",email,password);
                 apellidos, 
                 contrasena,
                 tipo,
-                descripcion
+                descripcion,
+                recompensas
                 FROM usuarios
             WHERE correo = $1;
             `,
@@ -135,6 +138,7 @@ console.log("Credenciales: ",email,password);
                 apellidos_usuario: user.apellidos,
                 tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
+                recompensas: user.recompensas,
             },
             SECRET_KEY,
             { expiresIn: "2h" }
@@ -148,6 +152,189 @@ console.log("Credenciales: ",email,password);
         console.error("Error en la autenticación:", error);
         res.status(500).json({ message: "Error interno del servidor" });
     }
+};
+
+
+
+//GET Recompensas para el avatar  
+
+export const getRecompensasDesdeDB = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  try {
+    const user = await pool.query(
+      "SELECT recompensas FROM usuarios WHERE id_usuario = $1",
+      [id_usuario]
+    );
+
+    if (user.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const recompensas = user.rows[0].recompensas;
+
+    if (!recompensas || recompensas.length === 0) {
+      return res.json({
+        sombreros: [],
+        tiburones: [],
+        marcos: [],
+        insignias: [],
+      });
+    }
+
+    const { rows } = await pool.query(
+      "SELECT id_recompensa, nombre, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1)",
+      [recompensas]
+    );
+
+    const agrupadas = {
+      sombreros: [],
+      tiburones: [],
+      marcos: [],
+      insignias: [],
+    };
+
+    for (const r of rows) {
+      const imgBase64 = `data:image/png;base64,${r.archivo}`;
+      switch (r.tipo) {
+        case '1': agrupadas.sombreros.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+        case '2': agrupadas.tiburones.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+        case '3': agrupadas.marcos.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+        case '4': agrupadas.insignias.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+      }
+    }
+    
+    res.json(agrupadas);
+  } catch (error) {
+    console.error("Error al obtener recompensas:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+// POST /avatar/guardar-imagen
+export const guardarAvatarConImagen = async (req, res) => {
+  try {
+    const { id_usuario, id_sombrero, id_marco, id_insignia, id_tiburon } = req.body;
+
+    // 1. Obtener imágenes base64 desde la tabla recompensas
+    const recompensas = await pool.query(
+      "SELECT id_recompensa, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1::text[])",
+      [[id_sombrero, id_marco, id_insignia, id_tiburon]]
+    );
+
+    // 2. Clasificar imágenes
+    let sombrero, marco, insignia, tiburon;
+    for (const r of recompensas.rows) {
+      const img = `data:image/png;base64,${r.archivo}`;
+      switch (r.tipo) {
+        case '1': sombrero = img; break;
+        case '2': tiburon = img; break;
+        case '3': marco = img; break;
+        case '4': insignia = img; break;
+      }
+    }
+
+    // 3. Crear canvas
+    const canvasSize = 224; // 56*4
+    const canvas = createCanvas(canvasSize, canvasSize);
+    const ctx = canvas.getContext('2d');
+
+    // 4. Cargar imágenes y dibujarlas
+    const drawIfExists = async (imgBase64) => {
+      if (!imgBase64) return;
+      const response = await fetch(imgBase64);
+      const buffer = await response.buffer();
+      const img = await loadImage(buffer);
+      ctx.drawImage(img, 0, 0, canvasSize, canvasSize);
+    };
+    await drawIfExists(marco);
+    await drawIfExists(tiburon);
+    await drawIfExists(sombrero);
+    // Dibujo de insignia más pequeña y centrada abajo
+    if (insignia) {
+      const response = await fetch(insignia);
+      const buffer = await response.buffer();
+      const img = await loadImage(buffer);
+
+      const insigniaSize = 56;
+      const x = (canvasSize - insigniaSize) / 2;
+      const y = canvasSize - insigniaSize - 4; // un poco más arriba del borde inferior
+      ctx.drawImage(img, x, y, insigniaSize, insigniaSize);
+    }
+    
+
+    // 5. Convertir canvas a buffer
+    const finalBuffer = canvas.toBuffer('image/png');
+
+    // 6. Actualizar la tabla avatar
+    await pool.query(`
+      INSERT INTO avatar (
+        id_user, id_sombrero, id_marco, id_insignia, id_tiburon, imagen
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (id_user) DO UPDATE SET 
+        id_sombrero = EXCLUDED.id_sombrero,
+        id_marco = EXCLUDED.id_marco,
+        id_insignia = EXCLUDED.id_insignia,
+        id_tiburon = EXCLUDED.id_tiburon,
+        imagen = EXCLUDED.imagen
+    `, [id_usuario, id_sombrero, id_marco, id_insignia, id_tiburon, finalBuffer]);
+    
+    
+
+    res.status(200).json({ message: "Avatar actualizado con imagen" });
+
+  } catch (error) {
+    console.error("Error al generar y guardar la imagen del avatar:", error);
+    res.status(500).json({ message: "Error interno al guardar imagen" });
+  }
+};
+
+// GET /avatar/seleccion?id_usuario=1
+export const obtenerAvatarSeleccion = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id_sombrero, id_marco, id_insignia, id_tiburon 
+       FROM avatar 
+       WHERE id_user = $1`,
+      [id_usuario]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "No hay selección de avatar" });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Error al obtener selección del avatar:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+// GET /avatar/imagen?id_usuario=1
+export const obtenerImagenAvatar = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT imagen FROM avatar WHERE id_user = $1",
+      [id_usuario]
+    );
+
+    if (rows.length === 0 || !rows[0].imagen) {
+      return res.status(404).json({ message: "Imagen no encontrada para este avatar." });
+    }
+
+    const buffer = rows[0].imagen;
+
+    // Establece los encabezados para devolver la imagen
+    res.setHeader("Content-Type", "image/png");
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error al obtener la imagen del avatar:", error);
+    res.status(500).json({ message: "Error interno al obtener la imagen del avatar." });
+  }
 };
 
 export { verifyToken };
