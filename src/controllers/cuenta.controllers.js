@@ -337,4 +337,43 @@ export const obtenerImagenAvatar = async (req, res) => {
   }
 };
 
+export const obtenerDatosPerfil = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const result = await pool.query(
+      "SELECT nombre, apellidos, correo, descripcion FROM usuarios WHERE id_usuario = $1",
+      [id_usuario]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error al obtener los datos del perfil:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+// Actualizar datos del perfil
+export const actualizarDatosPerfil = async (req, res) => {
+  const { id_usuario, nombre, apellidos, descripcion } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios 
+       SET nombre = $1, apellidos = $2, descripcion = $3
+       WHERE id_usuario = $4`,
+      [nombre, apellidos, descripcion, id_usuario]
+    );
+
+    res.json({ mensaje: "Datos actualizados correctamente" });
+  } catch (error) {
+    console.error("Error al actualizar datos del perfil:", error);
+    res.status(500).json({ error: "Error al actualizar datos del perfil" });
+  }
+};
+
 export { verifyToken };

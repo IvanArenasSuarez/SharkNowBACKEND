@@ -13,6 +13,8 @@ import {
     guardarAvatarConImagen, 
     obtenerAvatarSeleccion,
     obtenerImagenAvatar,   
+    obtenerDatosPerfil,
+    actualizarDatosPerfil,
  
 } from '../controllers/cuenta.controllers.js'
 
@@ -44,5 +46,9 @@ router.post("/avatar/guardar-imagen", guardarAvatarConImagen);
 router.get("/avatar/seleccion", obtenerAvatarSeleccion);
 
 router.get("/avatar/imagen", obtenerImagenAvatar);
+
+router.get("/perfil/datos", obtenerDatosPerfil);
+
+router.put("/perfil/actualizar", actualizarDatosPerfil);
 
 export default router;
