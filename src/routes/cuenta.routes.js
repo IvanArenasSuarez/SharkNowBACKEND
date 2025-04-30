@@ -38,7 +38,7 @@ router.put("/cuenta/:id", putCuenta);
 //Login
 router.post("/login", loginCuenta);
 
-// Obtener recompensas para el avatar
+// OBTENER RECOMPENSAS PARA EL AVATAR, GUARDAR IMAGEN, OBTENER LA SELECCION Y OBTENER IMAGEN
 router.post("/avatar/opciones", getRecompensasDesdeDB);
 
 router.post("/avatar/guardar-imagen", guardarAvatarConImagen);
@@ -46,6 +46,8 @@ router.post("/avatar/guardar-imagen", guardarAvatarConImagen);
 router.get("/avatar/seleccion", obtenerAvatarSeleccion);
 
 router.get("/avatar/imagen", obtenerImagenAvatar);
+
+// OBTENER Y ACTUALIZAR LOS DATOS PARA EL PERFIL
 
 router.get("/perfil/datos", obtenerDatosPerfil);
 
