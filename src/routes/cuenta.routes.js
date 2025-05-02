@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { 
+import {
     getCuentas,
     getCuenta,
     crearCuenta,
@@ -8,6 +8,8 @@ import {
     putCuenta,
     loginCuenta,
     verifyToken,
+    consultarCorreo,
+    actualizarContrasena,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -17,6 +19,12 @@ router.get("/cuenta", getCuentas);
 
 //Devolver un usuario especifico
 router.get("/cuenta/:id", getCuenta);
+
+//Verificar si el correo existe
+router.get("/verificarCorreo/:correo", consultarCorreo);
+
+//Cambiar Contraseña
+router.put("/cambiarContra", actualizarContrasena);
 
 //Insertar usuarios
 router.post("/cuenta", crearCuenta);

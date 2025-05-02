@@ -23,47 +23,125 @@ const verifyToken = (req, res, next) => {
 
 
 //GET Cuentas
-export const getCuentas = async (req,res)=>{
+export const getCuentas = async (req, res) => {
     const { rows } = await pool.query("SELECT * FROM cuenta_usuario");
     res.json(rows);
 };
 //GET Cuenta especifica
-export const getCuenta = async (req,res)=>{
+export const getCuenta = async (req, res) => {
     const { id } = req.params;
     const { rows } = await pool.query("SELECT * FROM cuenta_usuario WHERE id_usuario = $1", [id]);
-    
-    if(rows.length === 0){
-        return res.status(404).json({ message: "User not found"});
+
+    if (rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
     }
     res.json(rows[0]);
 };
 // POST Crear Cuenta
 export const crearCuenta = async (req, res) => {
-    const data = req.body;
-    const { nombre, corrreo, telefono, contraseña, tipo_de_cuenta, id_empresa } = data;
+    try {
+        const data = req.body;
+        const { nombre, apellidos, correo, tipo, contrasena } = data;
 
-    if (!corrreo || !contraseña || !nombre) {
-        return res.status(400).json({ message: "Faltan campos obligatorios" });
+        if (!correo || !contrasena || !nombre || !apellidos) {
+            return res.status(400).json({ message: "Faltan campos obligatorios" });
+        }
+
+        // Hashear la contraseña
+        const hashedPassword = await bcrypt.hash(contrasena, 10);
+        const desc = "Bienvenido a SharkNow";
+
+        const { rows } = await pool.query(
+            "INSERT INTO usuarios (nombre, apellidos ,correo, tipo, contrasena, descripcion) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            [nombre, apellidos, correo, tipo, hashedPassword, desc]
+        );
+        return res.status(201).json(rows[0]);
     }
-
-    // Hashear la contraseña
-    const hashedPassword = await bcrypt.hash(contraseña, 10);
-
-    const { rows } = await pool.query(
-        "INSERT INTO cuenta_usuario (id_empresa, nombre, corrreo, telefono, contraseña, tipo_de_cuenta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-        [id_empresa, nombre, corrreo, telefono, hashedPassword, tipo_de_cuenta]
-    );
-    return res.status(201).json(rows[0]);
+    catch (err) {
+        console.error("Error al crear la cuenta: ", err);
+        return res.status(500).json({ message: "Error interno del servidor" });
+    }
 };
+
+//GET Consultar Correo
+export const consultarCorreo = async (req, res) => {
+    try {
+        const { correo } = req.params;
+
+        const { rows } = await pool.query(
+            'SELECT 1 FROM usuarios WHERE correo = $1 LIMIT 1',
+            [correo]
+        );
+
+        const existe = rows.length > 0;
+
+        res.json({ existe });
+    }
+    catch (err) {
+        console.error("Error al verificar el correo: ", err);
+        res.status(500).json({ error: "Error al verificar el correo" });
+    }
+};
+//PUT Cambiar Contraseña
+export const actualizarContrasena = async (req, res) => {
+    try {
+        const { correo, contrasena } = req.body;
+
+        if (!correo || !contrasena) {
+            return res.status(400).json({
+                success: false,
+                message: "Correo y contraseña requeridos"
+            });
+        }
+
+        const { rows: [usuario] } = await pool.query(
+            'SELECT id_usuario FROM usuarios WHERE correo = $1 LIMIT 1',
+            [correo]
+        );
+
+        if (!usuario) {
+            return res.status(404).json({
+                success: false,
+                message: "Usuario no encontrado"
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(contrasena, 10);
+
+        const { rows: [usuarioActualizado] } = await pool.query(
+            `UPDATE usuarios
+             SET contrasena = $1
+             WHERE correo = $2
+             RETURNING id_usuario, correo`,
+            [hashedPassword, correo]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Contraseña actualizada exitosamente >w<",
+            data: usuarioActualizado
+        });
+    }
+    catch (err) {
+        console.error("Error al actualizar contraseña: ", err);
+        res.status(500).json({
+            success: false,
+            message: "Error interno del servidor",
+            error: err.message
+        });
+    }
+};
+
+
 //DELATE borrar cuenta
-export const borrarCuenta = async (req,res)=>{
+export const borrarCuenta = async (req, res) => {
     const { id } = req.params;
     const { rowCount } = await pool.query(
         "DELETE FROM cuenta_usuario WHERE id_usuario = $1 RETURNING *",
         [id]
     );
-    if(rowCount === 0){
-        return res.status(404).json({message: "Usuario no encontrado"});
+    if (rowCount === 0) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
     }
     return res.sendStatus(204);
 };
@@ -79,7 +157,7 @@ export const putCuenta = async (req, res) => {
     const { rows } = await pool.query(
         "UPDATE cuenta_usuario SET id_empresa = $1, nombre = $2, corrreo = $3, telefono = $4, contraseña = $5, tipo_de_cuenta = $6 WHERE id_usuario = $7 RETURNING *",
         [
-            id_empresa, nombre, corrreo, telefono, 
+            id_empresa, nombre, corrreo, telefono,
             hashedPassword || contraseña, tipo_de_cuenta, id
         ]
     );
@@ -90,7 +168,7 @@ export const putCuenta = async (req, res) => {
 // POST Login y generación de token
 export const loginCuenta = async (req, res) => {
     const { email, password } = req.body;
-console.log("Credenciales: ",email,password);
+    console.log("Credenciales: ", email, password);
     try {
         // Buscar al usuario por correo electrónico e incluir los datos de la empresa
         const { rows } = await pool.query(
@@ -116,10 +194,11 @@ console.log("Credenciales: ",email,password);
         const user = rows[0];
 
         console.log("Contraseña recibida:", password); // Depuración
-        console.log("Contraseña en base de datos:", user.contraseña); // Depuración
+        console.log("Contraseña en base de datos:", user.contrasena); // Depuración
 
+        const valid = await bcrypt.compare(password, user.contrasena);
         // Compara la contraseña en texto plano
-        if (user.contrasena !== password) {
+        if (!valid) {
             console.log("Contraseña incorrecta para el usuario:", email);
             return res.status(401).json({ message: "Credenciales inválidas" });
         }
@@ -134,7 +213,7 @@ console.log("Credenciales: ",email,password);
                 nombre_usuario: user.nombre,
                 apellidos_usuario: user.apellidos,
                 nombre_empresa: user.nombre_empresa,
-                tipo_de_cuenta: user.tip,
+                tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
             },
             SECRET_KEY,
