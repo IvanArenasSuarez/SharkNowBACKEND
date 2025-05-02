@@ -212,7 +212,6 @@ export const loginCuenta = async (req, res) => {
                 id_usuario: user.id_usuario,
                 nombre_usuario: user.nombre,
                 apellidos_usuario: user.apellidos,
-                nombre_empresa: user.nombre_empresa,
                 tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
             },
