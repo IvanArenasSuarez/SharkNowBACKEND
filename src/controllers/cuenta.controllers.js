@@ -342,7 +342,7 @@ export const obtenerDatosPerfil = async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT nombre, apellidos, correo, descripcion FROM usuarios WHERE id_usuario = $1",
+      "SELECT nombre, apellidos, correo, tipo, descripcion FROM usuarios WHERE id_usuario = $1",
       [id_usuario]
     );
 
@@ -375,5 +375,40 @@ export const actualizarDatosPerfil = async (req, res) => {
     res.status(500).json({ error: "Error al actualizar datos del perfil" });
   }
 };
+
+// GET /usuarios/autores
+export const buscarAutores = async (req, res) => {
+  const { busqueda } = req.query;
+
+  try {
+    const values = [1, 2]; // Tipo 1 (alumno) y tipo 2 (profesor)
+
+    let query = `
+      SELECT id_usuario, nombre, apellidos, descripcion
+      FROM usuarios
+      WHERE tipo = ANY($1)
+    `;
+
+    let params = [values];
+
+    if (busqueda && busqueda.trim() !== "") {
+      query += ` AND (LOWER(nombre) LIKE LOWER($2) OR LOWER(apellidos) LIKE LOWER($2))`;
+      params.push(`%${busqueda}%`);
+    }
+
+    query += ` ORDER BY apellidos ASC, nombre ASC`;
+
+    const { rows } = await pool.query(query, params);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al buscar autores:", error);
+    res.status(500).json({ message: "Error al buscar autores" });
+  }
+};
+
+
+
+
 
 export { verifyToken };

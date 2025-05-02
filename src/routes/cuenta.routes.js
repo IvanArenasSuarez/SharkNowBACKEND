@@ -15,6 +15,7 @@ import {
     obtenerImagenAvatar,   
     obtenerDatosPerfil,
     actualizarDatosPerfil,
+    buscarAutores,
  
 } from '../controllers/cuenta.controllers.js'
 
@@ -52,5 +53,9 @@ router.get("/avatar/imagen", obtenerImagenAvatar);
 router.get("/perfil/datos", obtenerDatosPerfil);
 
 router.put("/perfil/actualizar", actualizarDatosPerfil);
+
+// OBETNER USUARIOS PARA BUSQUEDA
+
+router.get("/usuarios/autores", buscarAutores);
 
 export default router;
