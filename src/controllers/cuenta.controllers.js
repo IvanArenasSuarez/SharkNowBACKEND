@@ -39,9 +39,12 @@ export const getCuenta = async (req, res) => {
 };
 // POST Crear Cuenta
 export const crearCuenta = async (req, res) => {
+
+    const cliente = await pool.connect();
+
     try {
         const data = req.body;
-        const { nombre, apellidos, correo, tipo, contrasena } = data;
+        const { nombre, apellidos, correo, tipo, contrasena, academias } = data;
 
         if (!correo || !contrasena || !nombre || !apellidos) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
@@ -51,15 +54,47 @@ export const crearCuenta = async (req, res) => {
         const hashedPassword = await bcrypt.hash(contrasena, 10);
         const desc = "Bienvenido a SharkNow";
 
-        const { rows } = await pool.query(
+        const { rows } = await cliente.query(
             "INSERT INTO usuarios (nombre, apellidos ,correo, tipo, contrasena, descripcion) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
             [nombre, apellidos, correo, tipo, hashedPassword, desc]
         );
-        return res.status(201).json(rows[0]);
+
+        const userId = rows[0].id_usuario;
+
+        if (tipo === 2 && academias && academias.length > 0) {
+            for (const academiaId of academias) {
+                await cliente.query(
+                    'INSERT INTO profesor_academia (id_usuario, id_academia, jefe) VALUES ($1, $2, $3)',
+                    [userId, academiaId, false]
+                );
+            }
+        }
+
+        await cliente.query('COMMIT');
+
+        const userResponse = await cliente.query(
+            'SELECT * FROM usuarios WHERE id_usuario = $1',
+            [userId]
+        );
+
+        return res.status(201).json(userResponse.rows[0]);
     }
     catch (err) {
+        await cliente.query('ROLLBACK');
         console.error("Error al crear la cuenta: ", err);
-        return res.status(500).json({ message: "Error interno del servidor" });
+
+        if (err.code === '23505') {
+            return res.status(400).json({
+                message: "El correo ya está registrado"
+            });
+        }
+        return res.status(500).json({
+            message: "Error interno del servidor",
+            error: err.message
+        });
+    }
+    finally {
+        cliente.release();
     }
 };
 
@@ -132,6 +167,23 @@ export const actualizarContrasena = async (req, res) => {
     }
 };
 
+//GET Obtener Academias
+export const obtenerAcademias = async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            'SELECT * FROM academias ORDER BY nombre'
+        );
+        res.json(rows);
+    }
+    catch (err) {
+        console.error("Error al consultar las academias", err);
+        res.status(500).json({
+            success: false,
+            message: "Error al consultar las academias",
+            error: err.message
+        });
+    }
+}
 
 //DELATE borrar cuenta
 export const borrarCuenta = async (req, res) => {

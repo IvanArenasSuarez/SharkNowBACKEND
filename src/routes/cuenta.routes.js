@@ -10,6 +10,7 @@ import {
     verifyToken,
     consultarCorreo,
     actualizarContrasena,
+    obtenerAcademias,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -28,6 +29,9 @@ router.put("/cambiarContra", actualizarContrasena);
 
 //Insertar usuarios
 router.post("/cuenta", crearCuenta);
+
+//Obtener Academias
+router.get("/academias", obtenerAcademias);
 
 //Borrar Cuenta
 router.delete("/cuenta/:id", borrarCuenta);
