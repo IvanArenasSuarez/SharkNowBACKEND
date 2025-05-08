@@ -16,6 +16,8 @@ import {
     obtenerDatosPerfil,
     actualizarDatosPerfil,
     buscarAutores,
+    buscarGuiasPorNombre,
+    buscarGuiasPorMateria,
  
 } from '../controllers/cuenta.controllers.js'
 
@@ -57,5 +59,13 @@ router.put("/perfil/actualizar", actualizarDatosPerfil);
 // OBETNER USUARIOS PARA BUSQUEDA
 
 router.get("/usuarios/autores", buscarAutores);
+
+// OBTENER GUIAS POR NOMBRE
+router.get("/guias/buscar", buscarGuiasPorNombre);
+
+// OBTENER GUIAS POR MATERIA
+router.get('/guias/buscar-por-materia', buscarGuiasPorMateria);
+
+
 
 export default router;

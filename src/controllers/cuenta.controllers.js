@@ -378,7 +378,7 @@ export const actualizarDatosPerfil = async (req, res) => {
 
 // GET /usuarios/autores
 export const buscarAutores = async (req, res) => {
-  const { busqueda } = req.query;
+  const { busqueda, id_usuario } = req.query;
 
   try {
     const values = [1, 2]; // Tipo 1 (alumno) y tipo 2 (profesor)
@@ -386,17 +386,18 @@ export const buscarAutores = async (req, res) => {
     let query = `
       SELECT id_usuario, nombre, apellidos, descripcion
       FROM usuarios
-      WHERE tipo = ANY($1)
+      WHERE tipo = ANY($1) 
+        AND id_usuario != $2
     `;
 
-    let params = [values];
+    let params = [values, id_usuario];
 
     if (busqueda && busqueda.trim() !== "") {
-      query += ` AND (LOWER(nombre) LIKE LOWER($2) OR LOWER(apellidos) LIKE LOWER($2))`;
+      query += ` AND (LOWER(nombre) LIKE LOWER($3) OR LOWER(apellidos) LIKE LOWER($3))`;
       params.push(`%${busqueda}%`);
     }
 
-    query += ` ORDER BY apellidos ASC, nombre ASC`;
+    query += ` ORDER BY nombre ASC, apellidos ASC`;
 
     const { rows } = await pool.query(query, params);
 
@@ -407,6 +408,99 @@ export const buscarAutores = async (req, res) => {
   }
 };
 
+// GET /guias/buscar?nombre=xyz
+export const buscarGuiasPorNombre = async (req, res) => {
+  const { busqueda, id_usuario } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        g.id_gde,
+        g.nombre AS nombre,
+        g.descripcion,
+        g.num_seguidores,
+        g.num_mesirve,
+        CASE 
+          WHEN g.tipo = 'E' THEN 'Extracurricular'
+          ELSE m.nombre
+        END AS nombre_materia,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        u.id_usuario,
+        u.tipo AS tipo_autor
+      FROM guias_de_estudio g
+      LEFT JOIN materias m ON g.id_materia = m.id_materias
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE g.estado = 'P'
+        AND u.id_usuario != $1
+    `;
+
+    const values = [id_usuario];
+
+    if (busqueda) {
+      query += ` AND LOWER(g.nombre) LIKE LOWER($2)`;
+      values.push(`%${busqueda}%`);
+    }
+
+    query += ` ORDER BY g.nombre ASC`;
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al buscar guías por nombre:", error);
+    res.status(500).json({ message: "Error al buscar guías" });
+  }
+};
+
+
+// GET /guias/buscar-por-materia?nombre_materia=xyz
+export const buscarGuiasPorMateria = async (req, res) => {
+  const { nombre_materia, id_usuario } = req.query;
+
+  try {
+    let values = [id_usuario];
+    let query = `
+      SELECT 
+        g.id_gde,
+        g.nombre AS nombre,
+        g.descripcion,
+        g.num_seguidores,
+        g.num_mesirve,
+        CASE 
+          WHEN g.tipo = 'E' THEN 'Extracurricular'
+          ELSE m.nombre
+        END AS nombre_materia,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        u.id_usuario,
+        u.tipo AS tipo_autor
+      FROM guias_de_estudio g
+      LEFT JOIN materias m ON g.id_materia = m.id_materias
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE g.estado = 'P'
+        AND u.id_usuario != $1
+    `;
+
+    if (nombre_materia) {
+      const nombreLower = nombre_materia.toLowerCase();
+      if (nombreLower.includes('ex')) {
+        query += ` AND g.tipo = 'E'`;
+      } else {
+        // Filtro por nombre de materia
+        query += ` AND LOWER(m.nombre) LIKE LOWER($2)`;
+        values.push(`%${nombre_materia}%`);
+      }
+    }
+
+    query += ` ORDER BY g.nombre ASC`;
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al buscar guías por materia:", error);
+    res.status(500).json({ message: "Error al buscar guías por materia" });
+  }
+};
 
 
 
