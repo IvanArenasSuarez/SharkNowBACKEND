@@ -502,7 +502,60 @@ export const buscarGuiasPorMateria = async (req, res) => {
   }
 };
 
+// GET /guias/sigue?id_usuario=1&id_gde=2
+export const verificarSiSigueGuia = async (req, res) => {
+  const { id_usuario, id_gde } = req.query;
 
+  try {
+    const { rowCount } = await pool.query(
+      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+      [id_usuario, id_gde]
+    );
+
+    res.json({ sigue: rowCount > 0 });
+  } catch (error) {
+    console.error("Error al verificar seguimiento de guía:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+// GET /guias/detalles?id_gde=1
+export const obtenerDetallesGuia = async (req, res) => {
+  const { id_gde } = req.query;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        g.nombre,
+        g.descripcion,
+        g.tipo,
+        g.version,
+        g.num_seguidores,
+        g.num_mesirve,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        m.nombre AS nombre_materia,
+        a.nombre AS nombre_academia,
+        p.nombre AS nombre_programa,
+        p.anio AS anio_plan
+      FROM guias_de_estudio g
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      LEFT JOIN materias m ON g.id_materia = m.id_materias
+      LEFT JOIN academias a ON m.id_academia = a.id_academia
+      LEFT JOIN planes_de_estudio p ON g.id_pde = p.id_pde
+      WHERE g.id_gde = $1
+    `, [id_gde]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Guía no encontrada" });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Error al obtener detalles de la guía:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
 
 
 export { verifyToken };

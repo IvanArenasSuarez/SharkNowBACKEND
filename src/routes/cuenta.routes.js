@@ -18,6 +18,8 @@ import {
     buscarAutores,
     buscarGuiasPorNombre,
     buscarGuiasPorMateria,
+    verificarSiSigueGuia,
+    obtenerDetallesGuia,
  
 } from '../controllers/cuenta.controllers.js'
 
@@ -66,6 +68,10 @@ router.get("/guias/buscar", buscarGuiasPorNombre);
 // OBTENER GUIAS POR MATERIA
 router.get('/guias/buscar-por-materia', buscarGuiasPorMateria);
 
+// VERIFICAR SI EL USUARIO SIGUE UNA GUIA
+router.get("/guias/sigue", verificarSiSigueGuia);
+
+router.get("/guias/detalles", obtenerDetallesGuia);
 
 
 export default router;
