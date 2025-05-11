@@ -14,7 +14,7 @@ const verifyToken = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        req.userId = decoded.id_usuario; // Extraemos el ID del usuario desde el token
+        req.userId = decoded.id; // Extraemos el ID del usuario desde el token
         next(); // Procedemos a la siguiente función
     } catch (error) {
         return res.status(401).json({ message: 'Token no válido.' });
