@@ -50,7 +50,7 @@ export const guardarGuia = async (req, res) => {
     let id_guia = parseInt(guia.id);
     console.log(id_guia);
     // Crear nueva guía
-    if (id_guia === null) {
+    if (id_guia === 0) {
       const result = await client.query(
         `INSERT INTO guias_de_estudio (
           tipo, nombre, descripcion,
