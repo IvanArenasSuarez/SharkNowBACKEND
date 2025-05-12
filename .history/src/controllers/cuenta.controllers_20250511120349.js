@@ -14,6 +14,7 @@ const verifyToken = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
+        console.log("Token decodificado:", decoded);
         req.userId = decoded.id_usuario; // Extraemos el ID del usuario desde el token
         next(); // Procedemos a la siguiente función
     } catch (error) {
