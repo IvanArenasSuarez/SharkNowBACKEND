@@ -1,27 +1,26 @@
 import { pool } from '../db.js';
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { createCanvas, loadImage } from 'canvas';
-import fetch from 'node-fetch';
+
 const SECRET_KEY = "secreto_super_seguro"; // Cambia esto <-
 
 // Middleware para verificar el token JWT
 const verifyToken = (req, res, next) => {
-    const token = req.header('Authorization')?.split(' ')[1];
-  
+    const token = req.header('Authorization')?.split(' ')[1]; // Obtener el token desde el header
+
     if (!token) {
-      return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
+        return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
     }
-  
+
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
-        req.userId = decoded.id_usuario; // Extraemos el ID del usuario desde el token
+        console.log("Token decodificado:", decoded);
+        req.userId = decoded.id; // Extraemos el ID del usuario desde el token
         next(); // Procedemos a la siguiente función
     } catch (error) {
-      return res.status(401).json({ message: 'Token no válido.' });
+        return res.status(401).json({ message: 'Token no válido.' });
     }
-  };
-  
+};
 
 
 //GET Cuentas
@@ -232,8 +231,7 @@ export const loginCuenta = async (req, res) => {
                 apellidos, 
                 contrasena,
                 tipo,
-                descripcion,
-                recompensas
+                descripcion
                 FROM usuarios
             WHERE correo = $1;
             `,
@@ -269,7 +267,6 @@ export const loginCuenta = async (req, res) => {
                 apellidos_usuario: user.apellidos,
                 tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
-                recompensas: user.recompensas,
             },
             SECRET_KEY,
             { expiresIn: "2h" }
@@ -508,7 +505,7 @@ export const actualizarDatosPerfil = async (req, res) => {
 
 // GET /usuarios/autores
 export const buscarAutores = async (req, res) => {
-  const { busqueda, id_usuario } = req.query;
+  const { busqueda } = req.query;
 
   try {
     const values = [1, 2]; // Tipo 1 (alumno) y tipo 2 (profesor)
@@ -516,18 +513,17 @@ export const buscarAutores = async (req, res) => {
     let query = `
       SELECT id_usuario, nombre, apellidos, descripcion
       FROM usuarios
-      WHERE tipo = ANY($1) 
-        AND id_usuario != $2
+      WHERE tipo = ANY($1)
     `;
 
-    let params = [values, id_usuario];
+    let params = [values];
 
     if (busqueda && busqueda.trim() !== "") {
-      query += ` AND (LOWER(nombre) LIKE LOWER($3) OR LOWER(apellidos) LIKE LOWER($3))`;
+      query += ` AND (LOWER(nombre) LIKE LOWER($2) OR LOWER(apellidos) LIKE LOWER($2))`;
       params.push(`%${busqueda}%`);
     }
 
-    query += ` ORDER BY nombre ASC, apellidos ASC`;
+    query += ` ORDER BY apellidos ASC, nombre ASC`;
 
     const { rows } = await pool.query(query, params);
 
@@ -535,155 +531,6 @@ export const buscarAutores = async (req, res) => {
   } catch (error) {
     console.error("Error al buscar autores:", error);
     res.status(500).json({ message: "Error al buscar autores" });
-  }
-};
-
-// GET /guias/buscar?nombre=xyz
-export const buscarGuiasPorNombre = async (req, res) => {
-  const { busqueda, id_usuario } = req.query;
-
-  try {
-    let query = `
-      SELECT 
-        g.id_gde,
-        g.nombre AS nombre,
-        g.descripcion,
-        g.num_seguidores,
-        g.num_mesirve,
-        CASE 
-          WHEN g.tipo = 'E' THEN 'Extracurricular'
-          ELSE m.nombre
-        END AS nombre_materia,
-        u.nombre AS nombre_autor,
-        u.apellidos AS apellidos_autor,
-        u.id_usuario,
-        u.tipo AS tipo_autor
-      FROM guias_de_estudio g
-      LEFT JOIN materias m ON g.id_materia = m.id_materias
-      JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
-        AND u.id_usuario != $1
-    `;
-
-    const values = [id_usuario];
-
-    if (busqueda) {
-      query += ` AND LOWER(g.nombre) LIKE LOWER($2)`;
-      values.push(`%${busqueda}%`);
-    }
-
-    query += ` ORDER BY g.nombre ASC`;
-
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar guías por nombre:", error);
-    res.status(500).json({ message: "Error al buscar guías" });
-  }
-};
-
-
-// GET /guias/buscar-por-materia?nombre_materia=xyz
-export const buscarGuiasPorMateria = async (req, res) => {
-  const { nombre_materia, id_usuario } = req.query;
-
-  try {
-    let values = [id_usuario];
-    let query = `
-      SELECT 
-        g.id_gde,
-        g.nombre AS nombre,
-        g.descripcion,
-        g.num_seguidores,
-        g.num_mesirve,
-        CASE 
-          WHEN g.tipo = 'E' THEN 'Extracurricular'
-          ELSE m.nombre
-        END AS nombre_materia,
-        u.nombre AS nombre_autor,
-        u.apellidos AS apellidos_autor,
-        u.id_usuario,
-        u.tipo AS tipo_autor
-      FROM guias_de_estudio g
-      LEFT JOIN materias m ON g.id_materia = m.id_materias
-      JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
-        AND u.id_usuario != $1
-    `;
-
-    if (nombre_materia) {
-      const nombreLower = nombre_materia.toLowerCase();
-      if (nombreLower.includes('ex')) {
-        query += ` AND g.tipo = 'E'`;
-      } else {
-        // Filtro por nombre de materia
-        query += ` AND LOWER(m.nombre) LIKE LOWER($2)`;
-        values.push(`%${nombre_materia}%`);
-      }
-    }
-
-    query += ` ORDER BY g.nombre ASC`;
-
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar guías por materia:", error);
-    res.status(500).json({ message: "Error al buscar guías por materia" });
-  }
-};
-
-// GET /guias/sigue?id_usuario=1&id_gde=2
-export const verificarSiSigueGuia = async (req, res) => {
-  const { id_usuario, id_gde } = req.query;
-
-  try {
-    const { rowCount } = await pool.query(
-      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
-      [id_usuario, id_gde]
-    );
-
-    res.json({ sigue: rowCount > 0 });
-  } catch (error) {
-    console.error("Error al verificar seguimiento de guía:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-};
-
-// GET /guias/detalles?id_gde=1
-export const obtenerDetallesGuia = async (req, res) => {
-  const { id_gde } = req.query;
-
-  try {
-    const { rows } = await pool.query(`
-      SELECT 
-        g.nombre,
-        g.descripcion,
-        g.tipo,
-        g.version,
-        g.num_seguidores,
-        g.num_mesirve,
-        u.nombre AS nombre_autor,
-        u.apellidos AS apellidos_autor,
-        m.nombre AS nombre_materia,
-        a.nombre AS nombre_academia,
-        p.nombre AS nombre_programa,
-        p.anio AS anio_plan
-      FROM guias_de_estudio g
-      JOIN usuarios u ON g.id_usuario = u.id_usuario
-      LEFT JOIN materias m ON g.id_materia = m.id_materias
-      LEFT JOIN academias a ON m.id_academia = a.id_academia
-      LEFT JOIN planes_de_estudio p ON g.id_pde = p.id_pde
-      WHERE g.id_gde = $1
-    `, [id_gde]);
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Guía no encontrada" });
-    }
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error("Error al obtener detalles de la guía:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
