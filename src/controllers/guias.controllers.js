@@ -24,7 +24,7 @@ export const obtenerPreguntasDeGuia = async (req, res) => {
       return {
         id: row.id_reactivo.toString(),
         type,
-        question: JSON.stringify(row.pregunta),
+        question: row.pregunta.texto,
         options: row.respuestas,
         answer: row.respuestas_correctas,
       };
@@ -77,8 +77,8 @@ export const guardarGuia = async (req, res) => {
     // INSERTAR nuevas preguntas
     for (const p of preguntas.nuevas) {
       const tipo = p.type === "multipleChoice" ? "M" :
-                   p.type === "trueFalse" ? "T" :
-                   p.type === "matching" ? "C" : null;
+        p.type === "trueFalse" ? "T" :
+          p.type === "matching" ? "C" : null;
 
       const preguntaJson = { texto: p.question };
       const respuestasJson = p.options;
@@ -107,8 +107,8 @@ export const guardarGuia = async (req, res) => {
     // ACTUALIZAR preguntas editadas
     for (const p of preguntas.editadas) {
       const tipo = p.type === "multipleChoice" ? "M" :
-                   p.type === "trueFalse" ? "T" :
-                   p.type === "matching" ? "C" : null;
+        p.type === "trueFalse" ? "T" :
+          p.type === "matching" ? "C" : null;
 
       const preguntaJson = { texto: p.question };
       const respuestasJson = p.options;
@@ -166,7 +166,7 @@ export const obtenerGuiasCreadas = async (req, res) => {
       'SELECT * FROM guias_de_estudio WHERE id_usuario = $1',
       [userId]
     );
-    console.log(userId,result.rows);
+    console.log(userId, result.rows);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'No se encontraron guías creadas por el usuario.' });
@@ -200,3 +200,33 @@ export const obtenerGuiasSeguidas = async (req, res) => {
   }
 };
 
+export const obtenerParametros = async (req, res) => {
+  const userId = req.userId;
+  try {
+    const client = await pool.connect();
+
+    const [materias, academias, plan] = await Promise.all([
+      client.query(`
+        SELECT 
+          m.id_materias, 
+          m.nombre, 
+          m.id_academia,
+          m.id_pde
+        FROM materias m`),
+      client.query('SELECT id_academia, nombre FROM academias'),
+      client.query('SELECT id_pde, nombre, anio FROM planes_de_estudio')
+    ]);
+
+    client.release();
+
+    res.json({
+      materias: materias.rows,
+      academias: academias.rows,
+      plan: plan.rows
+    });
+  }
+  catch (err) {
+    console.error('Error al obtener las opciones', err);
+    res.status(500).json({ error: 'Error al obtener las opciones' });
+  }
+};

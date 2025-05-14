@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { 
+import {
     obtenerPreguntasDeGuia,
     guardarGuia,
     obtenerGuiasCreadas,
-    obtenerGuiasSeguidas
+    obtenerGuiasSeguidas,
+    obtenerParametros
 } from '../controllers/guias.controllers.js';
 import { verifyToken } from '../controllers/cuenta.controllers.js';
 
@@ -13,12 +14,15 @@ const router = Router();
 router.get('/guias/preguntas', obtenerPreguntasDeGuia);
 
 // Ruta para guardar una guía de estudio
-router.post('/guias/guardar',verifyToken, guardarGuia);
+router.post('/guias/guardar', verifyToken, guardarGuia);
 
 // Ruta para obtener las guías creadas por el usuario autenticado
 router.get('/guias/creadas', verifyToken, obtenerGuiasCreadas);
 
 // Ruta para obtener las guías seguidas por el usuario autenticado
 router.get('/guias/seguidas', verifyToken, obtenerGuiasSeguidas);
+
+//Obtener parametros para las guías
+router.get('/guias/parametros', obtenerParametros);
 
 export default router;
