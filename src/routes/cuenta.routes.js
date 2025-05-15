@@ -22,6 +22,10 @@ import {
     buscarGuiasPorMateria,
     verificarSiSigueGuia,
     obtenerDetallesGuia,
+    seguirGuia,
+    marcarGuiaComoMeSirve,
+    quitarMeSirve,
+    dejarDeSeguirGuia,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -81,6 +85,16 @@ router.get('/guias/buscar-por-materia', buscarGuiasPorMateria);
 // VERIFICAR SI EL USUARIO SIGUE UNA GUIA
 router.get("/guias/sigue", verificarSiSigueGuia);
 
+// OBTENER DETALLES DE UNA GUIA
 router.get("/guias/detalles", obtenerDetallesGuia);
+
+// SEGUIR Y DEJAR DE SEGUIR UNA GUIA
+router.post('/guias/seguir', seguirGuia);
+router.delete('/guias/dejar-de-seguir', dejarDeSeguirGuia);
+
+// DAR Y QUITAR ME SIRVE
+router.put('/guias/marcar-mesirve', marcarGuiaComoMeSirve);
+router.put("/guias/quitar-mesirve", quitarMeSirve);
+
 
 export default router;

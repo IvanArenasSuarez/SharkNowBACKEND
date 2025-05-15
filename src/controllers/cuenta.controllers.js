@@ -637,17 +637,23 @@ export const verificarSiSigueGuia = async (req, res) => {
   const { id_usuario, id_gde } = req.query;
 
   try {
-    const { rowCount } = await pool.query(
-      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+    const result = await pool.query(
+      `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
       [id_usuario, id_gde]
     );
 
-    res.json({ sigue: rowCount > 0 });
+    if (result.rowCount === 0) {
+      return res.json({ sigue: false });
+    }
+
+    const { mesirve } = result.rows[0];
+    return res.json({ sigue: true, mesirve });
   } catch (error) {
     console.error("Error al verificar seguimiento de guía:", error);
     res.status(500).json({ message: "Error del servidor" });
   }
 };
+
 
 // GET /guias/detalles?id_gde=1
 export const obtenerDetallesGuia = async (req, res) => {
@@ -686,5 +692,123 @@ export const obtenerDetallesGuia = async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
+
+export const seguirGuia = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+    if (!id_usuario || !id_gde) {
+      return res.status(400).json({ message: "Faltan datos requeridos" });
+    }
+
+    // Insertar nuevo registro con mesirve en false
+    await pool.query(
+      `INSERT INTO progreso_de_guias (id_usuario, id_gde, mesirve) VALUES ($1, $2, false)`,
+      [id_usuario, id_gde]
+    );
+
+    res.status(200).json({ message: "Guía seguida exitosamente" });
+  } catch (error) {
+    console.error("Error al seguir la guía:", error);
+    res.status(500).json({ message: "Error al seguir la guía" });
+  }
+};
+
+
+export const marcarGuiaComoMeSirve = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  if (!id_usuario || !id_gde) {
+    return res.status(400).json({ message: "Faltan datos requeridos." });
+  }
+
+  try {
+    // Verifica si ya está marcada como mesirve
+    const check = await pool.query(
+      "SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2",
+      [id_usuario, id_gde]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: "No se encontró registro de seguimiento para esta guía." });
+    }
+
+    if (check.rows[0].mesirve === true) {
+      return res.status(400).json({ message: "La guía ya ha sido marcada como MeSirve." });
+    }
+
+    // Actualiza el estado de mesirve en progreso_de_guias
+    await pool.query(
+      "UPDATE progreso_de_guias SET mesirve = true WHERE id_usuario = $1 AND id_gde = $2",
+      [id_usuario, id_gde]
+    );
+
+    // Incrementa el contador en guias_de_estudio
+    await pool.query(
+      "UPDATE guias_de_estudio SET num_mesirve = num_mesirve + 1 WHERE id_gde = $1",
+      [id_gde]
+    );
+
+    res.status(200).json({ message: "MeSirve registrado correctamente." });
+
+  } catch (error) {
+    console.error("Error al marcar MeSirve:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+export const quitarMeSirve = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+    await pool.query(`
+      UPDATE progreso_de_guias 
+      SET mesirve = false 
+      WHERE id_usuario = $1 AND id_gde = $2
+    `, [id_usuario, id_gde]);
+
+    await pool.query(`
+      UPDATE guias_de_estudio 
+      SET num_mesirve = GREATEST(num_mesirve - 1, 0)
+      WHERE id_gde = $1
+    `, [id_gde]);
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error al quitar MeSirve:", error);
+    res.status(500).json({ message: "Error al quitar MeSirve" });
+  }
+};
+
+// DELETE /guias/dejar-seguir
+export const dejarDeSeguirGuia = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+    // Primero quitamos el MeSirve si está marcado
+    await pool.query(
+      `UPDATE guias_de_estudio
+       SET num_mesirve = num_mesirve - 1
+       WHERE id_gde = $1 AND $2 IN (
+         SELECT id_usuario FROM progreso_de_guias
+         WHERE id_gde = $1 AND mesirve = true
+       )`,
+      [id_gde, id_usuario]
+    );
+
+    // Luego eliminamos el registro de progreso
+    await pool.query(
+      `DELETE FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+      [id_usuario, id_gde]
+    );
+
+    res.status(200).json({ message: "Guía eliminada del seguimiento correctamente" });
+  } catch (error) {
+    console.error("Error al dejar de seguir guía:", error);
+    res.status(500).json({ message: "Error al dejar de seguir la guía" });
+  }
+};
+
+
 
 export { verifyToken };

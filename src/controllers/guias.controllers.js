@@ -24,7 +24,7 @@ export const obtenerPreguntasDeGuia = async (req, res) => {
       return {
         id: row.id_reactivo.toString(),
         type,
-        question: JSON.stringify(row.pregunta),
+        question: row.pregunta.texto,
         options: row.respuestas,
         answer: row.respuestas_correctas,
       };
