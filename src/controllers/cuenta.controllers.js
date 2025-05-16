@@ -828,19 +828,9 @@ export const registrarReporte = async (req, res) => {
   }
 
   try {
-    // Verificar si ya existe un reporte con misma categoría
-    const existe = await pool.query(
-      `SELECT 1 FROM reportes 
-       WHERE id_usuario = $1 AND id_gde = $2 AND categoria = $3 AND estado = 'P'`,
-      [id_usuario, id_gde, categoria]
-    );
-
-    if (existe.rowCount > 0) {
-      return res.status(409).json({ message: "Ya has reportado esta guía con esa categoría." });
-    }
-
-    // Si no existe, insertar el nuevo reporte
+        
     const fechaActual = new Date();
+    
     await pool.query(
       `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado)
        VALUES ($1, $2, $3, $4, $5, 'P')`,
