@@ -638,7 +638,7 @@ export const verificarSiSigueGuia = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+      `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2 AND estado = 'A'`,
       [id_usuario, id_gde]
     );
 
@@ -701,11 +701,25 @@ export const seguirGuia = async (req, res) => {
       return res.status(400).json({ message: "Faltan datos requeridos" });
     }
 
-    // Insertar nuevo registro con mesirve en false
-    await pool.query(
-      `INSERT INTO progreso_de_guias (id_usuario, id_gde, mesirve) VALUES ($1, $2, false)`,
+    // Verificar si ya existe un registro para ese usuario y guía
+    const { rowCount } = await pool.query(
+      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
       [id_usuario, id_gde]
     );
+
+    if (rowCount > 0) {
+      // Si ya existe, solo actualiza el estado a 'A'
+      await pool.query(
+        `UPDATE progreso_de_guias SET estado = 'A' WHERE id_usuario = $1 AND id_gde = $2`,
+        [id_usuario, id_gde]
+      );
+    } else {
+      // Si no existe, inserta un nuevo registro
+      await pool.query(
+        `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
+        [id_usuario, id_gde]
+      );
+    }
 
     res.status(200).json({ message: "Guía seguida exitosamente" });
   } catch (error) {
@@ -713,6 +727,7 @@ export const seguirGuia = async (req, res) => {
     res.status(500).json({ message: "Error al seguir la guía" });
   }
 };
+
 
 
 export const marcarGuiaComoMeSirve = async (req, res) => {
@@ -780,34 +795,31 @@ export const quitarMeSirve = async (req, res) => {
   }
 };
 
-// DELETE /guias/dejar-seguir
+
 export const dejarDeSeguirGuia = async (req, res) => {
   const { id_usuario, id_gde } = req.body;
 
   try {
-    // Primero quitamos el MeSirve si está marcado
-    await pool.query(
-      `UPDATE guias_de_estudio
-       SET num_mesirve = num_mesirve - 1
-       WHERE id_gde = $1 AND $2 IN (
-         SELECT id_usuario FROM progreso_de_guias
-         WHERE id_gde = $1 AND mesirve = true
-       )`,
-      [id_gde, id_usuario]
-    );
+     
+    if (!id_usuario || !id_gde) {
+      return res.status(400).json({ message: "Faltan datos requeridos." });
+    }
 
-    // Luego eliminamos el registro de progreso
+    // Desactivamos el seguimiento poniendo estado = 'I'
     await pool.query(
-      `DELETE FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+      `UPDATE progreso_de_guias 
+       SET estado = 'I'
+       WHERE id_usuario = $1 AND id_gde = $2`,
       [id_usuario, id_gde]
     );
 
-    res.status(200).json({ message: "Guía eliminada del seguimiento correctamente" });
+    res.status(200).json({ message: "Guía desactivada del seguimiento correctamente" });
   } catch (error) {
     console.error("Error al dejar de seguir guía:", error);
     res.status(500).json({ message: "Error al dejar de seguir la guía" });
   }
 };
+
 
 
 

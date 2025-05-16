@@ -90,7 +90,7 @@ router.get("/guias/detalles", obtenerDetallesGuia);
 
 // SEGUIR Y DEJAR DE SEGUIR UNA GUIA
 router.post('/guias/seguir', seguirGuia);
-router.delete('/guias/dejar-de-seguir', dejarDeSeguirGuia);
+router.put('/guias/dejar-de-seguir', dejarDeSeguirGuia);
 
 // DAR Y QUITAR ME SIRVE
 router.put('/guias/marcar-mesirve', marcarGuiaComoMeSirve);
