@@ -26,6 +26,7 @@ import {
     marcarGuiaComoMeSirve,
     quitarMeSirve,
     dejarDeSeguirGuia,
+    registrarReporte,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -95,6 +96,10 @@ router.put('/guias/dejar-de-seguir', dejarDeSeguirGuia);
 // DAR Y QUITAR ME SIRVE
 router.put('/guias/marcar-mesirve', marcarGuiaComoMeSirve);
 router.put("/guias/quitar-mesirve", quitarMeSirve);
+
+// REPORTAR UNA GUIA
+router.post('/reportes/registrar', registrarReporte);
+
 
 
 export default router;
