@@ -3,7 +3,9 @@ import {
     obtenerPreguntasDeGuia,
     guardarGuia,
     obtenerGuiasCreadas,
-    obtenerGuiasSeguidas
+    obtenerGuiasSeguidas,
+    eliminarGuia,
+    obtenerParametros
 } from '../controllers/guias.controllers.js';
 import { verifyToken } from '../controllers/cuenta.controllers.js';
 
@@ -20,5 +22,11 @@ router.get('/guias/creadas', verifyToken, obtenerGuiasCreadas);
 
 // Ruta para obtener las guías seguidas por el usuario autenticado
 router.get('/guias/seguidas', verifyToken, obtenerGuiasSeguidas);
+
+//Ruta para eliminar una guia
+router.get('/guias/eliminar/:id',verifyToken, eliminarGuia);
+
+//Obtener parametros para las guías
+router.get('/guias/parametros', obtenerParametros);
 
 export default router;

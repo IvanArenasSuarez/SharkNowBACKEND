@@ -7,20 +7,21 @@ const SECRET_KEY = "secreto_super_seguro"; // Cambia esto <-
 
 // Middleware para verificar el token JWT
 const verifyToken = (req, res, next) => {
-    const token = req.header('Authorization')?.split(' ')[1]; // Obtener el token desde el header
-
+    const token = req.header('Authorization')?.split(' ')[1];
+  
     if (!token) {
-        return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
+      return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
     }
-
+  
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
         req.userId = decoded.id_usuario; // Extraemos el ID del usuario desde el token
         next(); // Procedemos a la siguiente función
     } catch (error) {
-        return res.status(401).json({ message: 'Token no válido.' });
+      return res.status(401).json({ message: 'Token no válido.' });
     }
-};
+  };
+  
 
 
 //GET Cuentas
@@ -231,7 +232,8 @@ export const loginCuenta = async (req, res) => {
                 apellidos, 
                 contrasena,
                 tipo,
-                descripcion
+                descripcion,
+                recompensas
                 FROM usuarios
             WHERE correo = $1;
             `,
@@ -267,6 +269,7 @@ export const loginCuenta = async (req, res) => {
                 apellidos_usuario: user.apellidos,
                 tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
+                recompensas: user.recompensas,
             },
             SECRET_KEY,
             { expiresIn: "2h" }

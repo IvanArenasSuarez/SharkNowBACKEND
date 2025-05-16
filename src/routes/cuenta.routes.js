@@ -22,7 +22,6 @@ import {
     buscarGuiasPorMateria,
     verificarSiSigueGuia,
     obtenerDetallesGuia,
-
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();

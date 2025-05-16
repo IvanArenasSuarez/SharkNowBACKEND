@@ -13,8 +13,6 @@ export const obtenerPreguntasDeGuia = async (req, res) => {
       [id_guia]
     );
 
-
-
     const preguntas = result.rows.map((row) => {
       let type;
       if (row.tipo === 'M') type = 'multipleChoice';
@@ -24,12 +22,11 @@ export const obtenerPreguntasDeGuia = async (req, res) => {
       return {
         id: row.id_reactivo.toString(),
         type,
-        question: JSON.stringify(row.pregunta),
+        question: row.pregunta.texto,
         options: row.respuestas,
         answer: row.respuestas_correctas,
       };
     });
-
     res.json(preguntas);
   } catch (error) {
     console.error('Error al obtener preguntas:', error);
@@ -42,13 +39,8 @@ export const guardarGuia = async (req, res) => {
   const client = await pool.connect();
   try {
     const { guia, preguntas } = req.body;
-    console.log(guia);
-    console.log(preguntas);
-
     await client.query("BEGIN");
-
     let id_guia = parseInt(guia.id);
-    console.log(id_guia);
     // Crear nueva guía
     if (id_guia === 0) {
       const result = await client.query(
@@ -59,7 +51,7 @@ export const guardarGuia = async (req, res) => {
           version, estado
         ) VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $7, $8)
         RETURNING id_gde`,
-        [guia.tipo, guia.nombre, guia.descripcion, userId, guia.id_materia, guia.id_pde, guia.version, guia.estado]
+        [guia.tipo, guia.nombre, guia.descripcion, userId, guia.materia, guia.plan, guia.version, guia.estado]
       );
       id_guia = result.rows[0].id_gde;
     } else {
@@ -70,7 +62,7 @@ export const guardarGuia = async (req, res) => {
           id_usuario = $4, id_materia = $5, id_pde = $6,
           version = $7, estado = $8
         WHERE id_gde = $9`,
-        [guia.tipo, guia.nombre, guia.descripcion, userId, guia.id_materia, guia.id_pde, guia.version, guia.estado, id_guia]
+        [guia.tipo, guia.nombre, guia.descripcion, userId, guia.materia, guia.plan, guia.version, guia.estado, id_guia]
       );
     }
 
@@ -145,7 +137,6 @@ export const guardarGuia = async (req, res) => {
       );
     }
 
-
     await client.query("COMMIT");
     res.status(200).json({ message: "Guía guardada correctamente", id_guia });
 
@@ -158,7 +149,7 @@ export const guardarGuia = async (req, res) => {
   }
 };
 
-// Función para obtener las guías creadas por el usuario
+// Obtener guias creadas por el usuario
 export const obtenerGuiasCreadas = async (req, res) => {
   const userId = req.userId; // Obtiene el ID del usuario del token
   try {
@@ -166,12 +157,9 @@ export const obtenerGuiasCreadas = async (req, res) => {
       'SELECT * FROM guias_de_estudio WHERE id_usuario = $1',
       [userId]
     );
-    console.log(userId,result.rows);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'No se encontraron guías creadas por el usuario.' });
     }
-
     res.json(result.rows);
   } catch (error) {
     console.error('Error al obtener las guías creadas:', error);
@@ -179,9 +167,9 @@ export const obtenerGuiasCreadas = async (req, res) => {
   }
 };
 
-// Función para obtener las guías seguidas por el usuario sin terminar
+// Función para obtener las guías seguidas por el usuario SIN TERMINAR
 export const obtenerGuiasSeguidas = async (req, res) => {
-  const userId = req.userId; // Obtiene el ID del usuario del token
+  const userId = req.userId;
 
   try {
     const result = await pool.query(
@@ -200,3 +188,67 @@ export const obtenerGuiasSeguidas = async (req, res) => {
   }
 };
 
+export const eliminarGuia = async (req, res) => {
+    const idGuia = req.params.id;
+
+    try {
+        // 1. Verificar si existe y sus condiciones
+        const result = await pool.query(
+            'SELECT estado, num_seguidores FROM guias_de_estudio WHERE id_gde = $1',
+            [idGuia]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Guía no encontrada' });
+        }
+
+        const { estado, num_seguidores } = result.rows[0];
+
+        // 2. Validar condiciones para poder eliminar
+        if (estado === 'N' || (estado === 'P' && num_seguidores === 0)) {
+            // 3. Eliminar reactivos asociados
+            await pool.query('DELETE FROM reactivos WHERE id_gde = $1', [idGuia]);
+
+            // 4. Eliminar la guía
+            await pool.query('DELETE FROM guias_de_estudio WHERE id_gde = $1', [idGuia]);
+
+            return res.status(200).json({ message: 'Guía y reactivos eliminados correctamente' });
+        } else {
+            return res.status(400).json({ message: 'No se puede eliminar la guía: está publicada y tiene seguidores.' });
+        }
+    } catch (err) {
+        console.error('Error al eliminar la guía:', err);
+        return res.status(500).json({ message: 'Error del servidor' });
+    }
+};
+
+export const obtenerParametros = async (req, res) => {
+  const userId = req.userId;
+  try {
+    const client = await pool.connect();
+
+    const [materias, academias, plan] = await Promise.all([
+      client.query(`
+        SELECT 
+          m.id_materias, 
+          m.nombre, 
+          m.id_academia,
+          m.id_pde
+        FROM materias m`),
+      client.query('SELECT id_academia, nombre FROM academias'),
+      client.query('SELECT id_pde, nombre, anio FROM planes_de_estudio')
+    ]);
+
+    client.release();
+
+    res.json({
+      materias: materias.rows,
+      academias: academias.rows,
+      plan: plan.rows
+    });
+  }
+  catch (err) {
+    console.error('Error al obtener las opciones', err);
+    res.status(500).json({ error: 'Error al obtener las opciones' });
+  }
+};
