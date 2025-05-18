@@ -200,8 +200,9 @@ export const obtenerGuiasSeguidas = async (req, res) => {
   }
 };
 
+
+//GET parametros de guías de estudio
 export const obtenerParametros = async (req, res) => {
-  const userId = req.userId;
   try {
     const client = await pool.connect();
 
@@ -228,5 +229,75 @@ export const obtenerParametros = async (req, res) => {
   catch (err) {
     console.error('Error al obtener las opciones', err);
     res.status(500).json({ error: 'Error al obtener las opciones' });
+  }
+};
+
+//GET guías en revisión PROF
+export const obtenerGuiasEnRevision = async (req, res) => {
+  const userId = req.userId; // Obtiene el ID del usuario del token
+
+  try {
+    const result = await pool.query(
+      `SELECT 
+        sv.id_solicitud,
+        sv.id_gde,
+        sv.estado,
+        sv.motivo_de_rechazo,
+        g.nombre AS nombre
+      FROM 
+        solicitudes_de_validacion sv
+      JOIN
+        guias_de_estudio g ON sv.id_gde = g.id_gde
+      WHERE 
+        sv.id_usuario = $1`, [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron solicitudes de revisión' });
+    }
+
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al obtener las guías en revisión', err);
+    res.status(500).json({ error: 'Error al obtener las guías en revisión' });
+  }
+};
+
+//GET guias en revisión ACADEMIA
+export const obtenerGuiasEnRevisionAcad = async (req, res) => {
+  const { id_academia } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT 
+        sv.id_solicitud,
+        sv.id_gde,
+        sv.estado,
+        us.nombre AS nombre_usuario,
+        us.apellidos AS apellidos,
+        gde.nombre AS nombre_guia,
+        gde.descripcion AS descripcion
+      FROM 
+        solicitudes_de_validacion sv
+      JOIN 
+        guias_de_estudio gde ON sv.id_gde = gde.id_gde
+      JOIN 
+        materias m ON gde.id_materia = m.id_materias
+      JOIN
+        usuarios us ON gde.id_usuario = us.id_usuario
+      WHERE 
+        m.id_academia = $1
+        AND sv.estado = 'E'`,
+      [id_academia]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'No hay guías en solicitud de revisión' });
+    }
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al obtener las guías en revisión', err);
+    res.status(500).json({ error: 'Error al obtener las guias en revisión' });
   }
 };
