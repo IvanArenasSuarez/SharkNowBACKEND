@@ -844,7 +844,144 @@ export const registrarReporte = async (req, res) => {
   }
 };
 
+export const obtenerGuiasDeUsuario = async (req, res) => {
+  const { id_usuario } = req.query;
 
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el parámetro id_usuario" });
+  }
+
+  try {
+    const query = `
+      SELECT 
+        g.id_gde,
+        g.nombre AS nombre,
+        g.descripcion,
+        g.num_seguidores,
+        g.num_mesirve,
+        CASE 
+          WHEN g.tipo = 'E' THEN 'Extracurricular'
+          ELSE m.nombre
+        END AS nombre_materia,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        u.id_usuario,
+        u.tipo AS tipo_autor
+      FROM guias_de_estudio g
+      LEFT JOIN materias m ON g.id_materia = m.id_materias
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE g.estado = 'P'
+        AND u.id_usuario = $1
+      ORDER BY g.nombre ASC;
+    `;
+
+    const { rows } = await pool.query(query, [id_usuario]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener guías del usuario:", error);
+    res.status(500).json({ message: "Error al obtener guías del usuario." });
+  }
+};
+
+export const verificarJefeAcademia = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        a.id_academia,
+        a.nombre AS nombre_academia,
+        COALESCE(p1.jefe, false) AS es_jefe,
+        EXISTS (
+          SELECT 1 
+          FROM profesor_academia p2 
+          WHERE p2.id_academia = a.id_academia AND p2.jefe = true
+        ) AS academia_tiene_jefe
+      FROM academias a
+      JOIN profesor_academia p1 ON a.id_academia = p1.id_academia
+      WHERE p1.id_usuario = $1
+    `, [id_usuario]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error al verificar jefe de academia:", error);
+    res.status(500).json({ message: "Error al verificar jefe de academia" });
+  }
+};
+
+
+export const asignarJefeAcademia = async (req, res) => {
+  const { id_usuario, id_academia } = req.body;
+
+  if (!id_usuario || !id_academia) {
+    return res.status(400).json({ message: "Faltan datos requeridos." });
+  }
+
+  try {
+    // Verificar que el usuario esté en esa academia
+    const resultado = await pool.query(
+      `SELECT * FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
+      [id_usuario, id_academia]
+    );
+
+    if (resultado.rowCount === 0) {
+      return res.status(400).json({
+        message: "El usuario no pertenece a esta academia.",
+      });
+    }
+
+    // Verificar si ya existe un jefe en esa academia
+    const { rows: jefesExistentes } = await pool.query(
+      `SELECT * FROM profesor_academia WHERE id_academia = $1 AND jefe = true`,
+      [id_academia]
+    );
+
+    if (jefesExistentes.length > 0) {
+      return res.status(400).json({
+        message: "Ya existe un jefe para esta academia.",
+      });
+    }
+
+    // Actualizar el registro para poner jefe = true
+    await pool.query(
+      `UPDATE profesor_academia SET jefe = true WHERE id_usuario = $1 AND id_academia = $2`,
+      [id_usuario, id_academia]
+    );
+
+    res.status(200).json({ message: "Jefe de academia asignado correctamente." });
+  } catch (error) {
+    console.error("Error al asignar jefe de academia:", error);
+    res.status(500).json({ message: "Error del servidor al asignar jefe." });
+  }
+};
+
+// Eliminar jefe de academia
+export const quitarJefeAcademia = async (req, res) => {
+  const { id_usuario, id_academia } = req.body;
+
+  if (!id_usuario || !id_academia) {
+    return res.status(400).json({ message: "Faltan datos requeridos." });
+  }
+
+  try {
+    // Actualizar jefe a false para ese usuario y academia
+    const result = await pool.query(
+      `UPDATE profesor_academia
+       SET jefe = false
+       WHERE id_usuario = $1 AND id_academia = $2`,
+      [id_usuario, id_academia]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Registro no encontrado." });
+    }
+
+    res.status(200).json({ message: "Jefatura eliminada correctamente." });
+  } catch (error) {
+    console.error("Error al quitar jefe:", error);
+    res.status(500).json({ message: "Error al quitar la característica de jefe." });
+  }
+};
 
 
 

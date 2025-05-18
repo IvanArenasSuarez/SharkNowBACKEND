@@ -27,6 +27,10 @@ import {
     quitarMeSirve,
     dejarDeSeguirGuia,
     registrarReporte,
+    obtenerGuiasDeUsuario,
+    verificarJefeAcademia,
+    asignarJefeAcademia,
+    quitarJefeAcademia,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -100,6 +104,14 @@ router.put("/guias/quitar-mesirve", quitarMeSirve);
 // REPORTAR UNA GUIA
 router.post('/reportes/registrar', registrarReporte);
 
+// OBTENER GUIAS DE UN USUARIO
+router.get('/guias/por-usuario', obtenerGuiasDeUsuario);
+
+// ASIGNAR CARACTERISTCA DE ACADEMIA A UN USUARIO, VERIFICAR SI ES JEFE DE ACADEMIA Y QUITAR CARACTERISTICA
+router.get('/perfil/verificar-jefe', verificarJefeAcademia);
+
+router.put('/perfil/asignar-jefe', asignarJefeAcademia);
+router.put('/perfil/quitar-jefe', quitarJefeAcademia);
 
 
 export default router;
