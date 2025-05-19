@@ -4,6 +4,7 @@ import {
     guardarGuia,
     obtenerGuiasCreadas,
     obtenerGuiasSeguidas,
+    eliminarGuia,
     obtenerParametros,
     obtenerGuiasEnRevision,
     obtenerGuiasEnRevisionAcad
@@ -23,6 +24,9 @@ router.get('/guias/creadas', verifyToken, obtenerGuiasCreadas);
 
 // Ruta para obtener las guías seguidas por el usuario autenticado
 router.get('/guias/seguidas', verifyToken, obtenerGuiasSeguidas);
+
+//Ruta para eliminar una guia
+router.get('/guias/eliminar/:id',verifyToken, eliminarGuia);
 
 //Obtener parametros para las guías
 router.get('/guias/parametros', obtenerParametros);

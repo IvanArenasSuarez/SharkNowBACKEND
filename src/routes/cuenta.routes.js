@@ -22,7 +22,10 @@ import {
     buscarGuiasPorMateria,
     verificarSiSigueGuia,
     obtenerDetallesGuia,
-
+    obtenerGuiasDeUsuario,
+    verificarJefeAcademia,
+    asignarJefeAcademia,
+    quitarJefeAcademia,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -83,5 +86,15 @@ router.get('/guias/buscar-por-materia', buscarGuiasPorMateria);
 router.get("/guias/sigue", verificarSiSigueGuia);
 
 router.get("/guias/detalles", obtenerDetallesGuia);
+
+// OBTENER GUIAS DE UN USUARIO
+router.get('/guias/por-usuario', obtenerGuiasDeUsuario);
+
+// ASIGNAR CARACTERISTCA DE ACADEMIA A UN USUARIO, VERIFICAR SI ES JEFE DE ACADEMIA Y QUITAR CARACTERISTICA
+router.get('/perfil/verificar-jefe', verificarJefeAcademia);
+
+router.put('/perfil/asignar-jefe', asignarJefeAcademia);
+
+router.put('/perfil/quitar-jefe', quitarJefeAcademia);
 
 export default router;
