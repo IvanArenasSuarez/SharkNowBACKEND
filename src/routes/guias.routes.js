@@ -5,7 +5,9 @@ import {
     obtenerGuiasCreadas,
     obtenerGuiasSeguidas,
     eliminarGuia,
-    obtenerParametros
+    obtenerParametros,
+    obtenerGuiasEnRevision,
+    obtenerGuiasEnRevisionAcad
 } from '../controllers/guias.controllers.js';
 import { verifyToken } from '../controllers/cuenta.controllers.js';
 
@@ -28,5 +30,11 @@ router.get('/guias/eliminar/:id',verifyToken, eliminarGuia);
 
 //Obtener parametros para las guías
 router.get('/guias/parametros', obtenerParametros);
+
+//Obtener las solicitudes de validación PROFESOR
+router.get('/guias/solicitudes/prof', verifyToken, obtenerGuiasEnRevision);
+
+//Obtener las solicitudes de validación ACADEMIA
+router.get('/guias/solicitudes/acad', obtenerGuiasEnRevisionAcad);
 
 export default router;
