@@ -992,4 +992,77 @@ export const quitarJefeAcademia = async (req, res) => {
   }
 };
 
+export const verificarTransferenciaJefe = async (req, res) => {
+  const { id_origen, id_destino } = req.query;
+
+  if (!id_origen || !id_destino) {
+    return res.status(400).json({ message: "Faltan parámetros requeridos." });
+  }
+
+  try {
+    // 1. Verificar que ambos sean tipo 2 (profesores)
+    const resultUsuarios = await pool.query(
+      `SELECT id_usuario, tipo FROM usuarios WHERE id_usuario IN ($1, $2)`,
+      [id_origen, id_destino]
+    );
+
+    if (resultUsuarios.rowCount !== 2 || resultUsuarios.rows.some(u => u.tipo !== 2)) {
+      return res.json({ puede_transferir: false, message: "Ambos usuarios deben ser profesores." });
+    }
+
+    // 2. Obtener academias donde el origen es jefe
+    const academiasOrigen = await pool.query(
+      `SELECT id_academia FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+      [id_origen]
+    );
+
+    if (academiasOrigen.rowCount === 0) {
+      return res.json({ puede_transferir: false, message: "El usuario origen no es jefe en ninguna academia." });
+    }
+
+    const idAcademiaJefe = academiasOrigen.rows[0].id_academia; // Solo puede ser jefe de una
+
+    // 3. Verificar si el destino pertenece a esa academia
+    const perteneceDestino = await pool.query(
+      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
+      [id_destino, idAcademiaJefe]
+    );
+
+    if (perteneceDestino.rowCount === 0) {
+      return res.json({ puede_transferir: false, message: "El usuario destino no pertenece a la academia donde el origen es jefe." });
+    }
+
+    // 4. Verificar si el destino es jefe en alguna academia
+    const esJefeDestino = await pool.query(
+      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+      [id_destino]
+    );
+
+    if (esJefeDestino.rowCount > 0) {
+      return res.json({ puede_transferir: false, message: "El usuario destino ya es jefe en alguna academia." });
+    }
+
+    // 5. Obtener el nombre de la academia
+    const resultAcademia = await pool.query(
+      `SELECT nombre FROM academias WHERE id_academia = $1`,
+      [idAcademiaJefe]
+    );
+
+    const nombreAcademia = resultAcademia.rows[0]?.nombre || "Academia desconocida";
+
+    return res.json({
+      puede_transferir: true,
+      id_academia: idAcademiaJefe,
+      nombre_academia: nombreAcademia
+    });
+
+  } catch (error) {
+    console.error("Error al verificar transferencia de jefatura:", error);
+    res.status(500).json({ message: "Error al verificar transferencia de jefatura." });
+  }
+};
+
+
+
+
 export { verifyToken };
