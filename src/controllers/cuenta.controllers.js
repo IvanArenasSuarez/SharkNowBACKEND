@@ -550,6 +550,7 @@ export const buscarGuiasPorNombre = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -561,7 +562,7 @@ export const buscarGuiasPorNombre = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V') 
         AND u.id_usuario != $1
     `;
 
@@ -596,6 +597,7 @@ export const buscarGuiasPorMateria = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -607,7 +609,7 @@ export const buscarGuiasPorMateria = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V')
         AND u.id_usuario != $1
     `;
 
@@ -869,6 +871,7 @@ export const obtenerGuiasDeUsuario = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -880,7 +883,7 @@ export const obtenerGuiasDeUsuario = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V')
         AND u.id_usuario = $1
       ORDER BY g.nombre ASC;
     `;
