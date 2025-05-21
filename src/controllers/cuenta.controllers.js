@@ -637,12 +637,17 @@ export const verificarSiSigueGuia = async (req, res) => {
   const { id_usuario, id_gde } = req.query;
 
   try {
-    const { rowCount } = await pool.query(
-      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+    const result = await pool.query(
+      `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2 AND estado = 'A'`,
       [id_usuario, id_gde]
     );
 
-    res.json({ sigue: rowCount > 0 });
+    if (result.rowCount === 0) {
+      return res.json({ sigue: false });
+    }
+
+    const { mesirve } = result.rows[0];
+    return res.json({ sigue: true, mesirve });
   } catch (error) {
     console.error("Error al verificar seguimiento de guía:", error);
     res.status(500).json({ message: "Error del servidor" });
@@ -684,6 +689,167 @@ export const obtenerDetallesGuia = async (req, res) => {
   } catch (error) {
     console.error("Error al obtener detalles de la guía:", error);
     res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const seguirGuia = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+    if (!id_usuario || !id_gde) {
+      return res.status(400).json({ message: "Faltan datos requeridos" });
+    }
+
+    // Verificar si ya existe un registro para ese usuario y guía
+    const { rowCount } = await pool.query(
+      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+      [id_usuario, id_gde]
+    );
+
+    if (rowCount > 0) {
+      // Si ya existe, solo actualiza el estado a 'A'
+      await pool.query(
+        `UPDATE progreso_de_guias SET estado = 'A' WHERE id_usuario = $1 AND id_gde = $2`,
+        [id_usuario, id_gde]
+      );
+    } else {
+      // Si no existe, inserta un nuevo registro
+      await pool.query(
+        `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
+        [id_usuario, id_gde]
+      );
+    }
+    // Incrementar el número de seguidores en guias_de_estudio
+    await pool.query(
+      `UPDATE guias_de_estudio SET num_seguidores = num_seguidores + 1 WHERE id_gde = $1`,
+      [id_gde]
+    );
+
+    res.status(200).json({ message: "Guía seguida exitosamente" });
+  } catch (error) {
+    console.error("Error al seguir la guía:", error);
+    res.status(500).json({ message: "Error al seguir la guía" });
+  }
+};
+
+export const marcarGuiaComoMeSirve = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  if (!id_usuario || !id_gde) {
+    return res.status(400).json({ message: "Faltan datos requeridos." });
+  }
+
+  try {
+    // Verifica si ya está marcada como mesirve
+    const check = await pool.query(
+      "SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2",
+      [id_usuario, id_gde]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: "No se encontró registro de seguimiento para esta guía." });
+    }
+
+    if (check.rows[0].mesirve === true) {
+      return res.status(400).json({ message: "La guía ya ha sido marcada como MeSirve." });
+    }
+
+    // Actualiza el estado de mesirve en progreso_de_guias
+    await pool.query(
+      "UPDATE progreso_de_guias SET mesirve = true WHERE id_usuario = $1 AND id_gde = $2",
+      [id_usuario, id_gde]
+    );
+
+    // Incrementa el contador en guias_de_estudio
+    await pool.query(
+      "UPDATE guias_de_estudio SET num_mesirve = num_mesirve + 1 WHERE id_gde = $1",
+      [id_gde]
+    );
+
+    res.status(200).json({ message: "MeSirve registrado correctamente." });
+
+  } catch (error) {
+    console.error("Error al marcar MeSirve:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+export const quitarMeSirve = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+    await pool.query(`
+      UPDATE progreso_de_guias 
+      SET mesirve = false 
+      WHERE id_usuario = $1 AND id_gde = $2
+    `, [id_usuario, id_gde]);
+
+    await pool.query(`
+      UPDATE guias_de_estudio 
+      SET num_mesirve = GREATEST(num_mesirve - 1, 0)
+      WHERE id_gde = $1
+    `, [id_gde]);
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error al quitar MeSirve:", error);
+    res.status(500).json({ message: "Error al quitar MeSirve" });
+  }
+};
+
+export const dejarDeSeguirGuia = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+
+  try {
+     
+    if (!id_usuario || !id_gde) {
+      return res.status(400).json({ message: "Faltan datos requeridos." });
+    }
+
+    // Desactivamos el seguimiento poniendo estado = 'I'
+    await pool.query(
+      `UPDATE progreso_de_guias 
+       SET estado = 'I'
+       WHERE id_usuario = $1 AND id_gde = $2`,
+      [id_usuario, id_gde]
+    );
+
+    // Decrementamos el número de seguidores en guias_de_estudio
+    await pool.query(
+      `UPDATE guias_de_estudio 
+       SET num_seguidores = GREATEST(num_seguidores - 1, 0)
+       WHERE id_gde = $1`,
+      [id_gde]
+    );
+
+    res.status(200).json({ message: "Guía desactivada del seguimiento correctamente" });
+  } catch (error) {
+    console.error("Error al dejar de seguir guía:", error);
+    res.status(500).json({ message: "Error al dejar de seguir la guía" });
+  }
+};
+
+export const registrarReporte = async (req, res) => {
+  const { id_usuario, id_gde, categoria, descripcion } = req.body;
+
+  if (!id_usuario || !id_gde || !categoria || !descripcion) {
+    return res.status(400).json({ message: "Faltan datos requeridos." });
+  }
+
+  try {
+        
+    const fechaActual = new Date();
+    
+    await pool.query(
+      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado)
+       VALUES ($1, $2, $3, $4, $5, 'P')`,
+      [id_usuario, id_gde, categoria, descripcion, fechaActual]
+    );
+
+    res.status(201).json({ message: "Reporte registrado correctamente." });
+  } catch (error) {
+    console.error("Error al registrar el reporte:", error);
+    res.status(500).json({ message: "Error al registrar el reporte." });
   }
 };
 
