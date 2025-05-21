@@ -720,6 +720,11 @@ export const seguirGuia = async (req, res) => {
         [id_usuario, id_gde]
       );
     }
+    // Incrementar el número de seguidores en guias_de_estudio
+    await pool.query(
+      `UPDATE guias_de_estudio SET num_seguidores = num_seguidores + 1 WHERE id_gde = $1`,
+      [id_gde]
+    );
 
     res.status(200).json({ message: "Guía seguida exitosamente" });
   } catch (error) {
@@ -727,8 +732,6 @@ export const seguirGuia = async (req, res) => {
     res.status(500).json({ message: "Error al seguir la guía" });
   }
 };
-
-
 
 export const marcarGuiaComoMeSirve = async (req, res) => {
   const { id_usuario, id_gde } = req.body;
@@ -795,7 +798,6 @@ export const quitarMeSirve = async (req, res) => {
   }
 };
 
-
 export const dejarDeSeguirGuia = async (req, res) => {
   const { id_usuario, id_gde } = req.body;
 
@@ -811,6 +813,14 @@ export const dejarDeSeguirGuia = async (req, res) => {
        SET estado = 'I'
        WHERE id_usuario = $1 AND id_gde = $2`,
       [id_usuario, id_gde]
+    );
+
+    // Decrementamos el número de seguidores en guias_de_estudio
+    await pool.query(
+      `UPDATE guias_de_estudio 
+       SET num_seguidores = GREATEST(num_seguidores - 1, 0)
+       WHERE id_gde = $1`,
+      [id_gde]
     );
 
     res.status(200).json({ message: "Guía desactivada del seguimiento correctamente" });
@@ -909,7 +919,6 @@ export const verificarJefeAcademia = async (req, res) => {
   }
 };
 
-
 export const asignarJefeAcademia = async (req, res) => {
   const { id_usuario, id_academia } = req.body;
 
@@ -982,7 +991,5 @@ export const quitarJefeAcademia = async (req, res) => {
     res.status(500).json({ message: "Error al quitar la característica de jefe." });
   }
 };
-
-
 
 export { verifyToken };
