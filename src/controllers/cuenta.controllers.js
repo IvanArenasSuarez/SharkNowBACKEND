@@ -1066,6 +1066,202 @@ export const verificarTransferenciaJefe = async (req, res) => {
 };
 
 
+// VERIFICAR ESTADO DE USUARIO (RESTRINGIDO)
+export const verificarEstadoUsuario = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id_usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT estado FROM usuarios WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    res.json({ estado: result.rows[0].estado }); // true o false
+  } catch (error) {
+    console.error("Error al verificar estado del usuario:", error);
+    res.status(500).json({ message: "Error al consultar el estado del usuario." });
+  }
+};
+
+
+// RESTRINGIR ACCESO A USUARIO
+export const restringirAccesoUsuario = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id_usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios SET estado = false WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    res.json({ message: "Acceso restringido correctamente." });
+  } catch (error) {
+    console.error("Error al restringir acceso:", error);
+    res.status(500).json({ message: "Error al restringir acceso al usuario." });
+  }
+};
+
+
+// RESTAURAR ACCESO A USUARIO
+export const restaurarAcceso = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id del usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios SET estado = true WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    res.status(200).json({ message: "Acceso restaurado correctamente." });
+  } catch (error) {
+    console.error("Error al restaurar acceso:", error);
+    res.status(500).json({ message: "Error al restaurar el acceso del usuario." });
+  }
+};
+
+// Obtener reportes pendientes
+export const obtenerReportesPendientes = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        r.id_reporte,
+        g.id_gde,
+        g.nombre AS nombre_guia,
+        r.categoria,
+        r.descripcion,
+        u.id_usuario,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        u.tipo AS tipo_autor
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'P'
+      ORDER BY r.id_reporte DESC
+    `;
+
+    const { rows } = await pool.query(query);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener reportes pendientes:", error);
+    res.status(500).json({ message: "Error al obtener reportes" });
+  }
+};
+
+// Buscar reportes por nombre de guia
+export const buscarReportesPorNombre = async (req, res) => {
+  const { nombre, categoria } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        r.id_reporte,
+        r.categoria,
+        r.descripcion,
+        g.nombre AS nombre_guia,
+        g.id_usuario,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'P'
+    `;
+
+    const values = [];
+    let paramIndex = 1;
+
+    if (nombre) {
+      query += ` AND LOWER(g.nombre) LIKE LOWER($${paramIndex})`;
+      values.push(`%${nombre}%`);
+      paramIndex++;
+    }
+
+    if (categoria) {
+      query += ` AND r.categoria = $${paramIndex}`;
+      values.push(categoria);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY r.fecha ASC`;
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al buscar reportes:", error);
+    res.status(500).json({ message: "Error al buscar reportes" });
+  }
+};
+
+// Mostrar lista negra
+export const obtenerListaNegra = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.id_usuario,
+        u.nombre,
+        u.apellidos,
+        COUNT(r.id_reporte) AS total_reportes
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'A'
+      GROUP BY u.id_usuario, u.nombre, u.apellidos
+      ORDER BY total_reportes DESC;
+    `;
+
+    const { rows } = await pool.query(query);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener la lista negra:", error);
+    res.status(500).json({ message: "Error al obtener la lista negra." });
+  }
+};
+
+// Reportes anteriores para el perfil de usuario
+export const obtenerReportesAnteriores = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const query = `
+      SELECT 
+        r.id_reporte,
+        r.categoria,
+        g.nombre AS nombre_guia
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      WHERE g.id_usuario = $1 AND r.estado = 'A'
+      ORDER BY r.fecha ASC;
+    `;
+
+    const values = [id_usuario];
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener reportes anteriores:", error);
+    res.status(500).json({ message: "Error al obtener reportes anteriores" });
+  }
+};
 
 
 export { verifyToken };

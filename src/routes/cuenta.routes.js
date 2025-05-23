@@ -32,6 +32,13 @@ import {
     asignarJefeAcademia,
     quitarJefeAcademia,
     verificarTransferenciaJefe,
+    verificarEstadoUsuario,
+    restringirAccesoUsuario,
+    restaurarAcceso,
+    obtenerReportesPendientes,
+    buscarReportesPorNombre,
+    obtenerListaNegra,
+    obtenerReportesAnteriores,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -117,5 +124,15 @@ router.put('/perfil/quitar-jefe', quitarJefeAcademia);
 //TRANSFERIR CARACTERISTICA
 router.get("/perfil/verificar-transferencia-jefe", verificarTransferenciaJefe);
 
+// RESTRINGIR ACCESO Y RESTAURAR ACCESO 
+router.get("/perfil/estado", verificarEstadoUsuario);
+router.put("/perfil/restringir", restringirAccesoUsuario);
+router.put('/perfil/restaurar-acceso', restaurarAcceso);
+
+// REPORTES
+router.get("/reportes/pendientes", obtenerReportesPendientes);
+router.get("/reportes/buscar", buscarReportesPorNombre);
+router.get('/reportes/lista-negra', obtenerListaNegra);
+router.get('/reportes/anteriores', obtenerReportesAnteriores);
 
 export default router;
