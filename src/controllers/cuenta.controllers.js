@@ -1178,6 +1178,7 @@ export const buscarReportesPorNombre = async (req, res) => {
         r.id_reporte,
         r.categoria,
         r.descripcion,
+        r.id_gde,
         g.nombre AS nombre_guia,
         g.id_usuario,
         u.nombre AS nombre_autor,
