@@ -26,6 +26,7 @@ import {
     verificarJefeAcademia,
     asignarJefeAcademia,
     quitarJefeAcademia,
+    buscarJefeAcademia,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -96,5 +97,7 @@ router.get('/perfil/verificar-jefe', verificarJefeAcademia);
 router.put('/perfil/asignar-jefe', asignarJefeAcademia);
 
 router.put('/perfil/quitar-jefe', quitarJefeAcademia);
+
+router.get('/responsable-academia/:id_academia', buscarJefeAcademia);
 
 export default router;

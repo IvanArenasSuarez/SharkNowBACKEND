@@ -261,6 +261,22 @@ export const loginCuenta = async (req, res) => {
         // Eliminar la contraseña antes de firmar el token
         delete user.contraseña;
 
+        let academias = [];
+
+        if (user.tipo === 2) {
+        const result = await pool.query(
+          `SELECT id_academia, jefe
+           FROM profesor_academia
+           WHERE id_usuario = $1`,
+          [user.id_usuario]
+        );
+
+        academias = result.rows.map(a => ({
+          id: a.id_academia,
+          jefe: a.jefe
+        }));
+      }
+
         // Generar el token incluyendo la información del usuario y la empresa
         const token = jwt.sign(
             {
@@ -270,6 +286,8 @@ export const loginCuenta = async (req, res) => {
                 tipo_de_cuenta: user.tipo,
                 descripcion: user.descripcion,
                 recompensas: user.recompensas,
+                academias
+
             },
             SECRET_KEY,
             { expiresIn: "2h" }
@@ -824,5 +842,28 @@ export const quitarJefeAcademia = async (req, res) => {
     res.status(500).json({ message: "Error al quitar la característica de jefe." });
   }
 };
+
+export const buscarJefeAcademia = async (req, res) => {
+  const { id_academia } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT u.nombre || ' ' || u.apellidos AS nombre_completo
+      FROM profesor_academia pa
+      JOIN usuarios u ON pa.id_usuario = u.id_usuario
+      WHERE pa.id_academia = $1 AND pa.jefe = true
+      LIMIT 1`,
+      [id_academia]
+    );
+    if (result.rows.length === 0) {
+      return res.status(406).json({ error: 'Responsable no encontrado' });
+    }
+
+    res.json({ nombre: result.rows[0].nombre_completo });
+  } catch (error) {
+    console.error('Error al obtener responsable:', error);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+};
+
 
 export { verifyToken };
