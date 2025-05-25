@@ -833,20 +833,32 @@ export const dejarDeSeguirGuia = async (req, res) => {
 };
 
 export const registrarReporte = async (req, res) => {
-  const { id_usuario, id_gde, categoria, descripcion } = req.body;
+  const { id_usuario, id_gde, categoria, descripcion, id_quienreporto } = req.body;
 
-  if (!id_usuario || !id_gde || !categoria || !descripcion) {
+  if (!id_usuario || !id_gde || !categoria || !descripcion || !id_quienreporto) {
     return res.status(400).json({ message: "Faltan datos requeridos." });
   }
 
   try {
-        
+    // Validar si ya existe un reporte para esta guía, categoría y usuario que reporta
+    const existing = await pool.query(
+      `SELECT 1 FROM reportes 
+       WHERE id_gde = $1 AND categoria = $2 AND id_quienreporto = $3`,
+      [id_gde, categoria, id_quienreporto]
+    );
+
+    if (existing.rowCount > 0) {
+      return res.status(409).json({
+        message: "Ya has reportado esta guía por esa categoría.",
+      });
+    }
+
     const fechaActual = new Date();
-    
+
     await pool.query(
-      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado)
-       VALUES ($1, $2, $3, $4, $5, 'P')`,
-      [id_usuario, id_gde, categoria, descripcion, fechaActual]
+      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado, id_quienreporto)
+       VALUES ($1, $2, $3, $4, $5, 'P', $6)`,
+      [id_usuario, id_gde, categoria, descripcion, fechaActual, id_quienreporto]
     );
 
     res.status(201).json({ message: "Reporte registrado correctamente." });
@@ -855,6 +867,7 @@ export const registrarReporte = async (req, res) => {
     res.status(500).json({ message: "Error al registrar el reporte." });
   }
 };
+
 
 export const obtenerGuiasDeUsuario = async (req, res) => {
   const { id_usuario } = req.query;
@@ -1222,6 +1235,7 @@ export const obtenerListaNegra = async (req, res) => {
         u.id_usuario,
         u.nombre,
         u.apellidos,
+        u.estado,
         COUNT(r.id_reporte) AS total_reportes
       FROM reportes r
       JOIN guias_de_estudio g ON r.id_gde = g.id_gde
