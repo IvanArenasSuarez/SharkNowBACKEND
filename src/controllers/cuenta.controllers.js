@@ -568,6 +568,7 @@ export const buscarGuiasPorNombre = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -579,7 +580,7 @@ export const buscarGuiasPorNombre = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V') 
         AND u.id_usuario != $1
     `;
 
@@ -614,6 +615,7 @@ export const buscarGuiasPorMateria = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -625,7 +627,7 @@ export const buscarGuiasPorMateria = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V')
         AND u.id_usuario != $1
     `;
 
@@ -848,20 +850,32 @@ export const dejarDeSeguirGuia = async (req, res) => {
 };
 
 export const registrarReporte = async (req, res) => {
-  const { id_usuario, id_gde, categoria, descripcion } = req.body;
+  const { id_usuario, id_gde, categoria, descripcion, id_quienreporto } = req.body;
 
-  if (!id_usuario || !id_gde || !categoria || !descripcion) {
+  if (!id_usuario || !id_gde || !categoria || !descripcion || !id_quienreporto) {
     return res.status(400).json({ message: "Faltan datos requeridos." });
   }
 
   try {
-        
+    // Validar si ya existe un reporte para esta guía, categoría y usuario que reporta
+    const existing = await pool.query(
+      `SELECT 1 FROM reportes 
+       WHERE id_gde = $1 AND categoria = $2 AND id_quienreporto = $3`,
+      [id_gde, categoria, id_quienreporto]
+    );
+
+    if (existing.rowCount > 0) {
+      return res.status(409).json({
+        message: "Ya has reportado esta guía por esa categoría.",
+      });
+    }
+
     const fechaActual = new Date();
-    
+
     await pool.query(
-      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado)
-       VALUES ($1, $2, $3, $4, $5, 'P')`,
-      [id_usuario, id_gde, categoria, descripcion, fechaActual]
+      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado, id_quienreporto)
+       VALUES ($1, $2, $3, $4, $5, 'P', $6)`,
+      [id_usuario, id_gde, categoria, descripcion, fechaActual, id_quienreporto]
     );
 
     res.status(201).json({ message: "Reporte registrado correctamente." });
@@ -886,6 +900,7 @@ export const obtenerGuiasDeUsuario = async (req, res) => {
         g.descripcion,
         g.num_seguidores,
         g.num_mesirve,
+        g.estado,
         CASE 
           WHEN g.tipo = 'E' THEN 'Extracurricular'
           ELSE m.nombre
@@ -897,7 +912,7 @@ export const obtenerGuiasDeUsuario = async (req, res) => {
       FROM guias_de_estudio g
       LEFT JOIN materias m ON g.id_materia = m.id_materias
       JOIN usuarios u ON g.id_usuario = u.id_usuario
-      WHERE g.estado = 'P'
+      WHERE g.estado IN ('P', 'V')
         AND u.id_usuario = $1
       ORDER BY g.nombre ASC;
     `;
@@ -1031,5 +1046,271 @@ export const buscarJefeAcademia = async (req, res) => {
   }
 };
 
+export const verificarTransferenciaJefe = async (req, res) => {
+  const { id_origen, id_destino } = req.query;
+
+  if (!id_origen || !id_destino) {
+    return res.status(400).json({ message: "Faltan parámetros requeridos." });
+  }
+
+  try {
+    // 1. Verificar que ambos sean tipo 2 (profesores)
+    const resultUsuarios = await pool.query(
+      `SELECT id_usuario, tipo FROM usuarios WHERE id_usuario IN ($1, $2)`,
+      [id_origen, id_destino]
+    );
+
+    if (resultUsuarios.rowCount !== 2 || resultUsuarios.rows.some(u => u.tipo !== 2)) {
+      return res.json({ puede_transferir: false, message: "Ambos usuarios deben ser profesores." });
+    }
+
+    // 2. Obtener academias donde el origen es jefe
+    const academiasOrigen = await pool.query(
+      `SELECT id_academia FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+      [id_origen]
+    );
+
+    if (academiasOrigen.rowCount === 0) {
+      return res.json({ puede_transferir: false, message: "El usuario origen no es jefe en ninguna academia." });
+    }
+
+    const idAcademiaJefe = academiasOrigen.rows[0].id_academia; // Solo puede ser jefe de una
+
+    // 3. Verificar si el destino pertenece a esa academia
+    const perteneceDestino = await pool.query(
+      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
+      [id_destino, idAcademiaJefe]
+    );
+
+    if (perteneceDestino.rowCount === 0) {
+      return res.json({ puede_transferir: false, message: "El usuario destino no pertenece a la academia donde el origen es jefe." });
+    }
+
+    // 4. Verificar si el destino es jefe en alguna academia
+    const esJefeDestino = await pool.query(
+      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+      [id_destino]
+    );
+
+    if (esJefeDestino.rowCount > 0) {
+      return res.json({ puede_transferir: false, message: "El usuario destino ya es jefe en alguna academia." });
+    }
+
+    // 5. Obtener el nombre de la academia
+    const resultAcademia = await pool.query(
+      `SELECT nombre FROM academias WHERE id_academia = $1`,
+      [idAcademiaJefe]
+    );
+
+    const nombreAcademia = resultAcademia.rows[0]?.nombre || "Academia desconocida";
+
+    return res.json({
+      puede_transferir: true,
+      id_academia: idAcademiaJefe,
+      nombre_academia: nombreAcademia
+    });
+
+  } catch (error) {
+    console.error("Error al verificar transferencia de jefatura:", error);
+    res.status(500).json({ message: "Error al verificar transferencia de jefatura." });
+  }
+};
+
+// VERIFICAR ESTADO DE USUARIO (RESTRINGIDO)
+export const verificarEstadoUsuario = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id_usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT estado FROM usuarios WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    res.json({ estado: result.rows[0].estado }); // true o false
+  } catch (error) {
+    console.error("Error al verificar estado del usuario:", error);
+    res.status(500).json({ message: "Error al consultar el estado del usuario." });
+  }
+};
+
+// RESTRINGIR ACCESO A USUARIO
+export const restringirAccesoUsuario = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id_usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios SET estado = false WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    res.json({ message: "Acceso restringido correctamente." });
+  } catch (error) {
+    console.error("Error al restringir acceso:", error);
+    res.status(500).json({ message: "Error al restringir acceso al usuario." });
+  }
+};
+
+// RESTAURAR ACCESO A USUARIO
+export const restaurarAcceso = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    return res.status(400).json({ message: "Falta el id del usuario." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios SET estado = true WHERE id_usuario = $1`,
+      [id_usuario]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    res.status(200).json({ message: "Acceso restaurado correctamente." });
+  } catch (error) {
+    console.error("Error al restaurar acceso:", error);
+    res.status(500).json({ message: "Error al restaurar el acceso del usuario." });
+  }
+};
+
+// Obtener reportes pendientes
+export const obtenerReportesPendientes = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        r.id_reporte,
+        g.id_gde,
+        g.nombre AS nombre_guia,
+        r.categoria,
+        r.descripcion,
+        u.id_usuario,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor,
+        u.tipo AS tipo_autor
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'P'
+      ORDER BY r.id_reporte DESC
+    `;
+
+    const { rows } = await pool.query(query);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener reportes pendientes:", error);
+    res.status(500).json({ message: "Error al obtener reportes" });
+  }
+};
+
+// Buscar reportes por nombre de guia
+export const buscarReportesPorNombre = async (req, res) => {
+  const { nombre, categoria } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        r.id_reporte,
+        r.categoria,
+        r.descripcion,
+        r.id_gde,
+        g.nombre AS nombre_guia,
+        g.id_usuario,
+        u.nombre AS nombre_autor,
+        u.apellidos AS apellidos_autor
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'P'
+    `;
+
+    const values = [];
+    let paramIndex = 1;
+
+    if (nombre) {
+      query += ` AND LOWER(g.nombre) LIKE LOWER($${paramIndex})`;
+      values.push(`%${nombre}%`);
+      paramIndex++;
+    }
+
+    if (categoria) {
+      query += ` AND r.categoria = $${paramIndex}`;
+      values.push(categoria);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY r.fecha ASC`;
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al buscar reportes:", error);
+    res.status(500).json({ message: "Error al buscar reportes" });
+  }
+};
+
+// Mostrar lista negra
+export const obtenerListaNegra = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.id_usuario,
+        u.nombre,
+        u.apellidos,
+        u.estado,
+        COUNT(r.id_reporte) AS total_reportes
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      JOIN usuarios u ON g.id_usuario = u.id_usuario
+      WHERE r.estado = 'A'
+      GROUP BY u.id_usuario, u.nombre, u.apellidos
+      ORDER BY total_reportes DESC;
+    `;
+
+    const { rows } = await pool.query(query);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener la lista negra:", error);
+    res.status(500).json({ message: "Error al obtener la lista negra." });
+  }
+};
+
+// Reportes anteriores para el perfil de usuario
+export const obtenerReportesAnteriores = async (req, res) => {
+  const { id_usuario } = req.query;
+
+  try {
+    const query = `
+      SELECT 
+        r.id_reporte,
+        r.categoria,
+        g.nombre AS nombre_guia
+      FROM reportes r
+      JOIN guias_de_estudio g ON r.id_gde = g.id_gde
+      WHERE g.id_usuario = $1 AND r.estado = 'A'
+      ORDER BY r.fecha ASC;
+    `;
+
+    const values = [id_usuario];
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener reportes anteriores:", error);
+    res.status(500).json({ message: "Error al obtener reportes anteriores" });
+  }
+};
 
 export { verifyToken };
