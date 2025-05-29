@@ -40,6 +40,8 @@ import {
     obtenerListaNegra,
     obtenerReportesAnteriores,
     buscarJefeAcademia,
+    rechazarReporte,
+    aceptarReporte,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -135,6 +137,8 @@ router.get("/reportes/pendientes", obtenerReportesPendientes);
 router.get("/reportes/buscar", buscarReportesPorNombre);
 router.get('/reportes/lista-negra', obtenerListaNegra);
 router.get('/reportes/anteriores', obtenerReportesAnteriores);
+router.put('/reportes/rechazar', rechazarReporte);
+router.put('/reportes/aceptar', aceptarReporte);
 
 
 router.get('/responsable-academia/:id_academia', buscarJefeAcademia);

@@ -1315,4 +1315,86 @@ export const obtenerReportesAnteriores = async (req, res) => {
   }
 };
 
+export const rechazarReporte = async (req, res) => {
+  const { id_reporte } = req.body;
+
+  if (!id_reporte) {
+    return res.status(400).json({ error: "Falta el id_reporte" });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE reportes SET estado = 'R' WHERE id_reporte = $1",
+      [id_reporte]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Reporte no encontrado" });
+    }
+
+    res.json({ message: "Reporte rechazado exitosamente" });
+  } catch (error) {
+    console.error("Error al rechazar el reporte:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const aceptarReporte = async (req, res) => {
+  const { id_reporte, motivo } = req.body;
+
+  if (!id_reporte || !motivo || motivo.trim() === "") {
+    return res.status(400).json({ error: "Falta el id_reporte o el motivo es inválido" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Actualizar la tabla reportes
+    const updateReporte = await client.query(
+      "UPDATE reportes SET estado = 'A', motivo = $1 WHERE id_reporte = $2 RETURNING id_gde, id_usuario, categoria",
+      [motivo.trim(), id_reporte]
+    );
+
+    if (updateReporte.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Reporte no encontrado" });
+    }
+
+    const { id_gde, id_usuario, categoria } = updateReporte.rows[0];
+
+    // Actualizar la tabla guias_de_estudio
+    await client.query(
+      "UPDATE guias_de_estudio SET estado = 'N' WHERE id_gde = $1",
+      [id_gde]
+    );
+
+    // Si la categoría es 'disc_odio' o 'cont_exp', actualizar la tabla usuarios
+    if (categoria === "disc_odio" || categoria === "cont_exp") {
+      await client.query(
+        "UPDATE usuarios SET estado = false WHERE id_usuario = $1",
+        [id_usuario]
+      );
+    }
+
+     if (categoria === "spam" || categoria === "disonancia") {
+      console.log("Es categoría spam o disonancia");
+      // NOTIFICAIONES
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Reporte aceptado exitosamente" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al aceptar el reporte:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+
+
+
 export { verifyToken };
