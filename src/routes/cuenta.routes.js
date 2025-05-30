@@ -42,6 +42,7 @@ import {
     buscarJefeAcademia,
     rechazarReporte,
     aceptarReporte,
+    eliminarCuentaUsuario,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -131,6 +132,7 @@ router.get("/perfil/verificar-transferencia-jefe", verificarTransferenciaJefe);
 router.get("/perfil/estado", verificarEstadoUsuario);
 router.put("/perfil/restringir", restringirAccesoUsuario);
 router.put('/perfil/restaurar-acceso', restaurarAcceso);
+router.delete('/perfil/eliminar', eliminarCuentaUsuario);
 
 // REPORTES
 router.get("/reportes/pendientes", obtenerReportesPendientes);

@@ -1395,6 +1395,110 @@ export const aceptarReporte = async (req, res) => {
 };
 
 
+export const eliminarCuentaUsuario = async (req, res) => {
+  const { id_usuario } = req.body;
+
+  if (!id_usuario) {
+    return res.status(400).json({ error: "Falta el id_usuario" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Obtener todas las guías del usuario
+    const guiasResult = await client.query(
+      "SELECT id_gde FROM guias_de_estudio WHERE id_usuario = $1",
+      [id_usuario]
+    );
+    const idsGuia = guiasResult.rows.map(row => row.id_gde);
+
+    // Decrementar seguidores
+    await client.query(`
+      UPDATE guias_de_estudio
+      SET num_seguidores = num_seguidores - 1
+      WHERE id_gde IN (
+        SELECT id_gde FROM progreso_de_guias
+        WHERE id_usuario = $1 AND estado = 'A'
+      )
+    `, [id_usuario]);
+
+    // Decrementar mesirve
+    await client.query(`
+      UPDATE guias_de_estudio
+      SET num_mesirve = num_mesirve - 1
+      WHERE id_gde IN (
+        SELECT id_gde FROM progreso_de_guias
+        WHERE id_usuario = $1 AND mesirve = true
+      )
+    `, [id_usuario]);
+
+    // Eliminar sde_salidas (por id_usuario o por guías)
+    await client.query(`
+      DELETE FROM sde_salidas
+      WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
+    `, [id_usuario, idsGuia]);
+
+    // Eliminar sesion_de_estudio (por id_usuario o guías)
+    await client.query(`
+      DELETE FROM sesion_de_estudio
+      WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
+    `, [id_usuario, idsGuia]);
+
+    // Eliminar notificaciones (por id_usuario o guías)
+    await client.query(`
+      DELETE FROM notificaciones
+      WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
+    `, [id_usuario, idsGuia]);
+
+    // Eliminar progreso_de_guias (por id_usuario o guías)
+    await client.query(`
+      DELETE FROM progreso_de_guias
+      WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
+    `, [id_usuario, idsGuia]);
+
+    // Eliminar reportes donde fue autor o quien reportó
+    await client.query(`
+      DELETE FROM reportes
+      WHERE id_usuario = $1 OR id_quienreporto = $1
+    `, [id_usuario]);
+
+    // Eliminar reactivos de las guías
+    await client.query(`
+      DELETE FROM reactivos
+      WHERE id_gde = ANY($1::bigint[])
+    `, [idsGuia]);
+
+    // Eliminar guías del usuario
+    await client.query(`
+      DELETE FROM guias_de_estudio
+      WHERE id_usuario = $1
+    `, [id_usuario]);
+    
+    // Eliminar avatar
+    await client.query("DELETE FROM avatar WHERE id_user = $1", [id_usuario]);
+
+    // Finalmente, eliminar el usuario
+    await client.query(`
+      DELETE FROM usuarios
+      WHERE id_usuario = $1
+    `, [id_usuario]);
+
+    await client.query("COMMIT");
+
+    res.json({ message: "Cuenta y datos relacionados eliminados correctamente" });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al eliminar la cuenta:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  } finally {
+    client.release();
+  }
+};
+
+
 
 
 export { verifyToken };
