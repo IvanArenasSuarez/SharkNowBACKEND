@@ -57,7 +57,7 @@ export const crearCuenta = async (req, res) => {
         const desc = "Bienvenido a SharkNow";
 
         const { rows } = await cliente.query(
-            "INSERT INTO usuarios (nombre, apellidos ,correo, tipo, contrasena, descripcion) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            "INSERT INTO usuarios (nombre, apellidos ,correo, tipo, contrasena, descripcion, estado) VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING *",
             [nombre, apellidos, correo, tipo, hashedPassword, desc]
         );
 
