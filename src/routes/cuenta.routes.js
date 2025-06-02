@@ -32,6 +32,7 @@ import {
     asignarJefeAcademia,
     quitarJefeAcademia,
     buscarJefeAcademia,
+    eliminarCuentaUsuario,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -105,8 +106,6 @@ router.put("/guias/quitar-mesirve", quitarMeSirve);
 // REPORTAR UNA GUIA
 router.post('/reportes/registrar', registrarReporte);
 
-
-
 // OBTENER GUIAS DE UN USUARIO
 router.get('/guias/por-usuario', obtenerGuiasDeUsuario);
 
@@ -117,5 +116,7 @@ router.put('/perfil/asignar-jefe', asignarJefeAcademia);
 router.put('/perfil/quitar-jefe', quitarJefeAcademia);
 
 router.get('/responsable-academia/:id_academia', buscarJefeAcademia);
+
+router.delete('/perfil/eliminar', eliminarCuentaUsuario);
 
 export default router;
