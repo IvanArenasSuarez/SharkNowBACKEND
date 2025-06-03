@@ -40,6 +40,8 @@ import {
     obtenerListaNegra,
     obtenerReportesAnteriores,
     buscarJefeAcademia,
+    rechazarReporte,
+    aceptarReporte,
     eliminarCuentaUsuario,
 } from '../controllers/cuenta.controllers.js'
 
@@ -130,13 +132,15 @@ router.get("/perfil/verificar-transferencia-jefe", verificarTransferenciaJefe);
 router.get("/perfil/estado", verificarEstadoUsuario);
 router.put("/perfil/restringir", restringirAccesoUsuario);
 router.put('/perfil/restaurar-acceso', restaurarAcceso);
+router.delete('/perfil/eliminar', eliminarCuentaUsuario);
 
 // REPORTES
 router.get("/reportes/pendientes", obtenerReportesPendientes);
 router.get("/reportes/buscar", buscarReportesPorNombre);
 router.get('/reportes/lista-negra', obtenerListaNegra);
 router.get('/reportes/anteriores', obtenerReportesAnteriores);
-
+router.put('/reportes/rechazar', rechazarReporte);
+router.put('/reportes/aceptar', aceptarReporte);
 
 router.get('/responsable-academia/:id_academia', buscarJefeAcademia);
 
