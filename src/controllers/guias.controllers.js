@@ -154,7 +154,34 @@ export const obtenerGuiasCreadas = async (req, res) => {
   const userId = req.userId; // Obtiene el ID del usuario del token
   try {
     const result = await pool.query(
-      'SELECT * FROM guias_de_estudio WHERE id_usuario = $1',
+      `SELECT
+          gde.id_gde,
+          gde.tipo,
+          gde.nombre,
+          gde.descripcion,
+          gde.id_usuario,
+          gde.id_materia,
+          gde.id_pde,
+          gde.version,
+          gde.estado,
+          m.nombre AS nombre_materia,
+          aca.nombre AS nombre_academia,
+          pde.nombre AS nombre_pde,
+          us.nombre AS nombre_usuario,
+          us.apellidos
+        FROM
+          guias_de_estudio gde
+        JOIN
+          materias m ON gde.id_materia = m.id_materias
+        JOIN
+          academias aca ON m.id_academia = aca.id_academia
+        JOIN
+          planes_de_estudio pde ON gde.id_pde = pde.id_pde
+        JOIN
+          usuarios us ON gde.id_usuario = us.id_usuario
+        WHERE
+          gde.id_usuario = $1
+      `,
       [userId]
     );
     if (result.rows.length === 0) {
@@ -173,7 +200,33 @@ export const obtenerGuiasSeguidas = async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT * FROM guias_de_estudio WHERE id_gde IN (SELECT id_gde FROM progreso_de_guias WHERE id_usuario = $1)',
+      `SELECT
+          gde.id_gde,
+          gde.tipo,
+          gde.nombre AS nombre_gde,
+          gde.descripcion AS descripcion,
+          gde.id_usuario,
+          gde.id_materia,
+          gde.version,
+          gde.estado AS estado_gde,
+          m.nombre AS nombre_materia,
+          aca.nombre AS nombre_academia,
+          pde.nombre AS nombre_pde,
+          us.nombre AS nombre_usuario,
+          us.apellidos
+        FROM
+          guias_de_estudio gde
+        JOIN
+          materias m ON gde.id_materia = m.id_materias
+        JOIN
+          academias aca ON m.id_academia = aca.id_academia
+        JOIN
+          planes_de_estudio pde ON m.id_pde = pde.id_pde
+        JOIN
+          usuarios us ON gde.id_usuario = us.id_usuario
+        WHERE
+          gde.id_gde IN (SELECT id_gde FROM progreso_de_guias WHERE id_usuario = $1 AND estado = 'A')
+      `,
       [userId]
     );
 
@@ -264,7 +317,14 @@ export const obtenerGuiasEnRevision = async (req, res) => {
         sv.id_gde,
         sv.estado,
         sv.motivo_de_rechazo,
-        g.nombre AS nombre
+        g.tipo,
+        g.nombre AS nombre,
+        g.descripcion,
+        g.id_materia,
+        g.id_pde,
+        g.num_seguidores,
+        g.version,
+        g.estado AS guia_estado
       FROM 
         solicitudes_de_validacion sv
       JOIN
@@ -296,14 +356,26 @@ export const obtenerGuiasEnRevisionAcad = async (req, res) => {
         sv.estado,
         us.nombre AS nombre_usuario,
         us.apellidos AS apellidos,
+        gde.tipo,
         gde.nombre AS nombre_guia,
-        gde.descripcion AS descripcion
+        gde.descripcion AS descripcion,
+        gde.id_materia,
+        gde.id_pde,
+        gde.version,
+        m.nombre AS nombre_materia,
+        gde.estado AS guia_estado,
+        aca.nombre AS nombre_academia,
+        pde.nombre AS nombre_pde
       FROM 
         solicitudes_de_validacion sv
       JOIN 
         guias_de_estudio gde ON sv.id_gde = gde.id_gde
       JOIN 
         materias m ON gde.id_materia = m.id_materias
+      JOIN
+        academias aca ON m.id_academia = aca.id_academia
+      JOIN
+        planes_de_estudio pde ON m.id_pde = pde.id_pde
       JOIN
         usuarios us ON gde.id_usuario = us.id_usuario
       WHERE 
@@ -320,5 +392,173 @@ export const obtenerGuiasEnRevisionAcad = async (req, res) => {
   catch (err) {
     console.error('Error al obtener las guías en revisión', err);
     res.status(500).json({ error: 'Error al obtener las guias en revisión' });
+  }
+};
+
+//GET Obtener la información de las sesiones programadas
+export const obtenerInfoProgreso = async (req, res) => {
+  const { id_gde, id_usuario } = req.query;
+  try {
+    const result = await pool.query(`
+      SELECT
+        estado,
+        fecha_inicio,
+        fecha_final,
+        dias,
+        hora,
+        mesirve
+      FROM
+        progreso_de_guias
+      WHERE
+        id_gde = $1 AND id_usuario = $2;
+    `, [id_gde, id_usuario]);
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al obtener la información de las sesiones programadas', err);
+    res.status(500).json({ error: 'Error al obtener la información de las sesiones programadas' });
+  }
+};
+
+//PUT Actualizar la información de las sesiones programadas
+export const actualizarInfoProgreso = async (req, res) => {
+  const { id_gde, id_usuario, fecha_inicio, fecha_final, dias, hora } = req.body;
+
+  if (!Array.isArray(dias)) {
+    return res.status(400).json({
+      error: "El campo 'dias' debe ser un array"
+    });
+  }
+
+  try {
+    const diasJSON = JSON.stringify(dias);
+    /*
+        console.log("id_gde: ", id_gde);
+        console.log("id_usuario: ", id_usuario);
+        console.log("fecha_inicio: ", fecha_inicio);
+        console.log("fecha_final: ", fecha_final);
+        console.log("dias: ", dias);
+        console.log("hora: ", hora);
+    */
+    const result = await pool.query(`
+      UPDATE 
+        progreso_de_guias
+      SET
+        fecha_inicio = $1,
+        fecha_final = $2,
+        dias = $3,
+        hora = $4
+      WHERE
+        id_gde = $5 AND id_usuario = $6
+      RETURNING *;
+      `, [fecha_inicio, fecha_final, diasJSON, hora, id_gde, id_usuario]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no encontrado",
+        message: `No se encontró progreso para la guía ${id_gde} y usuario ${id_usuario}. Verifica los IDs.`
+      });
+    }
+
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al actualizar los datos del progreso de guias.', err);
+    res.status(500).json({
+      error: 'Error al actualizar los datos del progreso de guias',
+      details: err.message
+    });
+  }
+};
+
+export const rechazarGuiaAcademia = async (req, res) => {
+  const { id_solicitud, motivo } = req.body;
+
+  try {
+    const result = await pool.query(`
+      UPDATE
+        solicitudes_de_validacion
+      SET
+        estado = 'R',
+        motivo_de_rechazo = $1
+      WHERE
+        id_solicitud = $2
+      RETURNING *;
+    `, [motivo, id_solicitud]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no Encontrado",
+        message: `No se encontró solicitud con id: ${id_solicitud} Verifica los IDs.`
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  }
+  catch (err) {
+    console.error('Error al rechazar la guía de estudio', err);
+    res.status(500).json({
+      error: 'Error al rechazar la guia de estudio',
+      details: err.message
+    });
+
+  }
+};
+
+//POST Aceptar validación y eliminar solicitud
+export const aceptarValidacion = async (req, res) => {
+  const { id_gde, id_solicitud } = req.body;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const aceptar = await client.query(`
+      UPDATE
+        guias_de_estudio
+      SET
+        estado = 'V'
+      WHERE
+        id_gde = $1
+      RETURNING *;
+    `, [id_gde]);
+
+    if (aceptar.rowCount === 0) {
+      throw new Error(`Guia con id_gde = ${id_gde} no encontrada`);
+    }
+
+    const eliminar = await client.query(`
+      DELETE FROM
+        solicitudes_de_validacion
+      WHERE
+        id_solicitud = $1
+      RETURNING *;
+    `, [id_solicitud]);
+
+    if (eliminar.rowCount === 0) {
+      throw new Error(`Solicitud con id_solicitud = ${id_solicitud} no encontrada`);
+    }
+
+    await client.query('COMMIT');
+    res.status(200).json({
+      success: true,
+      guia: aceptar.rows[0],
+      solicitud: eliminar.rows[0]
+    });
+  }
+  catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+  finally {
+    client.release();
   }
 };

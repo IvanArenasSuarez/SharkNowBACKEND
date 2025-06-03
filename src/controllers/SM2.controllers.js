@@ -5,35 +5,74 @@ import { verifyToken } from './cuenta.controllers.js';
 
 //Enviar las preguntas
 export const obtenerQuiz = [
+  
   verifyToken,
   async (req, res) => {
-    const id_usuario = req.userId;       
-    const { id_gde } = req.params;  
-
+    const id_usuario = req.userId;
+    const { id_gde } = req.params;
+    console.log(id_usuario);
+    console.log(id_gde);
+    let primeraVez = false;
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+    
     try {
-      // Obtener los 15 IDs de reactivo a enviar
-      const { rows: filasIds } = await pool.query(`
+      // Intentar obtener reactivos desde sde_salidas
+      let { rows: filasIds } = await pool.query(`
+        WITH candidatas AS (
         SELECT sde.id_reactivo
         FROM sde_salidas sde
         WHERE sde.id_usuario = $1
           AND sde.id_gde     = $2
           AND (
-            sde.fecha_ultima IS NULL
-            OR sde.fecha_ultima + (sde.intervalo || ' days')::interval <= CURRENT_DATE
+            sde.ultima_fecha IS NULL
+            OR sde.ultima_fecha + (sde.intervalo || ' days')::interval <= CURRENT_DATE
           )
-        ORDER BY 
-          (sde.fecha_ultima IS NOT NULL),
-          sde.fecha_ultima
+        ),
+        complemento AS (
+        SELECT sde.id_reactivo
+        FROM sde_salidas sde
+        WHERE sde.id_usuario = $1
+          AND sde.id_gde     = $2
+          AND sde.id_reactivo NOT IN (SELECT id_reactivo FROM candidatas)
+        )
+        SELECT id_reactivo
+        FROM (
+          SELECT id_reactivo FROM candidatas
+          UNION ALL
+          SELECT id_reactivo FROM complemento
+        ) AS combinado
         LIMIT 15
+
       `, [id_usuario, id_gde]);
 
-      const ids = filasIds.map(f => f.id_reactivo);
+      let ids = filasIds.map(f => f.id_reactivo);
 
+      // Si no hay registros válidos en sde_salidas, usar 15 preguntas aleatorias
+      if (ids.length === 0) {
+        console.log('No hay reactivos disponibles en sde_salidas. Usando aleatorios de reactivos.');
+        const { rows: aleatorios } = await pool.query(`
+          SELECT id_reactivo
+          FROM reactivos
+          WHERE id_gde = $1
+          ORDER BY RANDOM()
+          LIMIT 15
+        `, [id_gde]);
+        ids = aleatorios.map(r => r.id_reactivo);
+        primeraVez=true;
+      }
+
+      // Si aún así no hay preguntas, mandar error
       if (ids.length === 0) {
         return res.status(404).json({ message: 'No hay preguntas disponibles para este quiz.' });
       }
 
-      // Obtener datos completos de los reactivos seleccionados
+      // Obtener los datos completos de los reactivos seleccionados
       const { rows: reactivos } = await pool.query(`
         SELECT
           id_reactivo,
@@ -69,8 +108,9 @@ export const obtenerQuiz = [
 
         if (r.tipo === 'M') {
           return {
+            id: parseInt(r.id_reactivo),
             type: "multipleChoice",
-            question: pregunta,
+            question: pregunta.text.texto,
             options: options.map(option => option.text),
             answer: r.respuestas_correctas[0]
           };
@@ -78,8 +118,9 @@ export const obtenerQuiz = [
 
         if (r.tipo === 'T') {
           return {
+            id: parseInt(r.id_reactivo),
             type: "trueFalse",
-            question: pregunta.text,
+            question: pregunta.text.texto,
             options: ["Verdadero", "Falso"],
             answer: r.respuestas_correctas[0]
           };
@@ -87,22 +128,22 @@ export const obtenerQuiz = [
 
         if (r.tipo === 'C') {
           let pairs = r.respuestas.map((respuesta, index) => ({
-            left: respuesta,
-            right: r.respuestas_correctas[index]
+            left: respuesta.izquierda,
+            right: respuesta.derecha
           }));
-
           return {
-            type: "matching",
-            question: pregunta.text,
-            pairs: pairs
+          id: parseInt(r.id_reactivo),
+          type: "matching",
+          question: pregunta.text.texto,
+          pairs: pairs
           };
         }
 
+
         return null;
       }).filter(q => q !== null);
-
-      return res.json({ preguntas: quiz });
-
+      shuffleArray(quiz);
+      return res.json({ preguntas: quiz ,primeraVez});
     } catch (error) {
       console.error('Error al obtener el quiz:', error);
       return res.status(500).json({ message: 'Error interno del servidor.' });
@@ -113,6 +154,13 @@ export const obtenerQuiz = [
 //Registrar resultados
 export const registrarSesionEstudio = async (req, res) => {
   const { id_usuario, id_gde, respuestas, hora_inicio, hora_fin } = req.body;
+  console.log(req.body);
+  let correctas = 0;
+  let questions = 0;
+    for (const { id_reactivo, calidad } of respuestas) {
+	    questions++;
+      if (calidad >= 3) correctas++;
+	}
 
   try {
     // Verificar si ya existe una sesión hoy
@@ -141,33 +189,32 @@ export const registrarSesionEstudio = async (req, res) => {
 
     // Nueva sesión
     await pool.query(`
-      INSERT INTO "sesion_de_estudio" (id_usuario, id_gde, hora_inicio, hora_fin, fecha)
-      VALUES ($1, $2, $3, $4, CURRENT_DATE)
-    `, [id_usuario, id_gde, hora_inicio, hora_fin]);
+      INSERT INTO sesion_de_estudio (id_usuario, id_gde, hora_inicio, hora_final, fecha,total_reactivos,correctas)
+      VALUES ($1, $2, $3, $4, CURRENT_DATE,$5,$6)
+    `, [id_usuario, id_gde, hora_inicio, hora_fin,questions,correctas]);
 
     // Inicializar todos los reactivos si es la primera vez
     if (esPrimeraSesionGuia) {
+      console.log("nueva guia");
       const { rows: todosReactivos } = await pool.query(`
         SELECT id_reactivo
-        FROM reactivo
+        FROM reactivos
         WHERE id_gde = $1
       `, [id_gde]);
 
       for (const { id_reactivo } of todosReactivos) {
         await pool.query(`
-          INSERT INTO "sde_salidas" (id_usuario, id_gde, id_reactivo, repeticion, intervalo, facilidad, fecha_ultima)
+          INSERT INTO "sde_salidas" (id_usuario, id_gde, id_reactivo, repeticion, intervalo, facilidad, ultima_fecha)
           VALUES ($1, $2, $3, 0, 0, 2.5, NULL)
         `, [id_usuario, id_gde, id_reactivo]);
       }
     }
 
     // Actualizar cada reactivo contestado
-    let correctas = 0;
     for (const { id_reactivo, calidad } of respuestas) {
-      if (calidad >= 3) correctas++;
 
       const { rows } = await pool.query(`
-        SELECT repeticion, intervalo, facilidad, fecha_ultima
+        SELECT repeticion, intervalo, facilidad, ultima_fecha
         FROM "sde_salidas"
         WHERE id_usuario = $1
           AND id_gde = $2
@@ -176,6 +223,7 @@ export const registrarSesionEstudio = async (req, res) => {
       `, [id_usuario, id_gde, id_reactivo]);
 
       let { repeticion, intervalo, facilidad } = rows[0];
+      facilidad = parseFloat(facilidad)
 
       // Ajustar SM-2
       if (calidad >= 3) {
@@ -198,7 +246,7 @@ export const registrarSesionEstudio = async (req, res) => {
         SET repeticion = $1,
             intervalo = $2,
             facilidad = $3,
-            fecha_ultima = CURRENT_DATE
+            ultima_fecha = CURRENT_DATE
         WHERE id_usuario = $4
           AND id_gde = $5
           AND id_reactivo = $6

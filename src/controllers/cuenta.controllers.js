@@ -1498,7 +1498,4 @@ export const eliminarCuentaUsuario = async (req, res) => {
   }
 };
 
-
-
-
 export { verifyToken };
