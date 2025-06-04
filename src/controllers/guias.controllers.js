@@ -472,7 +472,6 @@ export const obtenerGuiasEnRevisionAcad = async (req, res) => {
   }
 };
 
-//PUT Rechazar Valicación de Academia
 export const rechazarGuiaAcademia = async (req, res) => {
   const { id_solicitud, motivo } = req.body;
 
@@ -563,4 +562,3 @@ export const aceptarValidacion = async (req, res) => {
     client.release();
   }
 };
-
