@@ -431,6 +431,7 @@ export const obtenerGuiasEnRevisionAcad = async (req, res) => {
         sv.id_solicitud,
         sv.id_gde,
         sv.estado,
+        us.id_usuario AS id_usuario,
         us.nombre AS nombre_usuario,
         us.apellidos AS apellidos,
         gde.tipo,
