@@ -12,6 +12,8 @@ import {
     actualizarInfoProgreso,
     rechazarGuiaAcademia,
     aceptarValidacion,
+    publicarGuia,
+    enviarSolicitud,
 } from '../controllers/guias.controllers.js';
 import { verifyToken } from '../controllers/cuenta.controllers.js';
 
@@ -29,6 +31,12 @@ router.get('/guias/creadas', verifyToken, obtenerGuiasCreadas);
 // Ruta para obtener las guías seguidas por el usuario autenticado
 router.get('/guias/seguidas', verifyToken, obtenerGuiasSeguidas);
 
+//Publicar guía de estudio
+router.put('/guias/publicar', verifyToken, publicarGuia);
+
+//Crear solicitud de validación por academia
+router.post('/guias/enviarSolicitud', verifyToken, enviarSolicitud);
+
 //Ruta para eliminar una guia
 router.get('/guias/eliminar/:id', verifyToken, eliminarGuia);
 
@@ -39,7 +47,7 @@ router.get('/guias/parametros', obtenerParametros);
 router.get('/guias/solicitudes/prof', verifyToken, obtenerGuiasEnRevision);
 
 //Obtener las solicitudes de validación ACADEMIA
-router.get('/guias/solicitudes/acad', obtenerGuiasEnRevisionAcad);
+router.get('/guias/solicitudes/acad', verifyToken, obtenerGuiasEnRevisionAcad);
 
 //Obtener los valores del progreso de guias
 router.get('/guias/progreso/info', verifyToken, obtenerInfoProgreso);

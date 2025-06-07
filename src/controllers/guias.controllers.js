@@ -338,8 +338,9 @@ export const eliminarGuia = async (req, res) => {
     if (estado === 'N' || (estado === 'P' && num_seguidores === 0)) {
       // 3. Eliminar reactivos asociados
       await pool.query('DELETE FROM reactivos WHERE id_gde = $1', [idGuia]);
-
-      // 4. Eliminar la guía
+      // 4. Elimina las solicitudes de validacion
+      await pool.query('DELETE FROM solicitudes_de_validacion WHERE id_gde = $1', [idGuia]);
+      // 5. Eliminar la guía
       await pool.query('DELETE FROM guias_de_estudio WHERE id_gde = $1', [idGuia]);
 
       return res.status(200).json({ message: 'Guía y reactivos eliminados correctamente' });
@@ -382,6 +383,96 @@ export const obtenerParametros = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener las opciones' });
   }
 };
+
+//PUT Actualizar el estado de la guía de estudio
+export const publicarGuia = async (req, res) => {
+  const { id_gde } = req.body;
+
+  try {
+    const result = await pool.query(`
+      UPDATE
+        guias_de_estudio
+      SET
+        estado = 'P'
+      WHERE
+        id_gde = $1
+      RETURNING
+        *;
+    `, [id_gde]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no Encontrado",
+        message: `No se encontró la guia con id: ${id_gde} Verifica los IDs.`
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  }
+  catch (err) {
+    console.error('Error al publicar la guía de estudio', err);
+    res.status(500).json({
+      error: 'Error al publicar la guía de estudio',
+      details: err.message
+    });
+  }
+}
+
+//POST Crear solicitud de validación por Academia
+export const enviarSolicitud = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+  try {
+    // Primero verificar si ya existe
+    const existe = await pool.query(
+      `SELECT 1 FROM solicitudes_de_validacion 
+        WHERE id_gde = $1 AND id_usuario = $2`,
+      [id_gde, id_usuario]
+    );
+
+    let result;
+    if (existe.rowCount > 0) {
+      // Actualizar si existe
+      result = await pool.query(`
+        UPDATE solicitudes_de_validacion
+        SET estado = 'E',
+            motivo_de_rechazo = NULL
+        WHERE id_gde = $1 AND id_usuario = $2
+        RETURNING *;
+      `, [id_gde, id_usuario]);
+    } else {
+      // Insertar si no existe
+      result = await pool.query(`
+        INSERT INTO solicitudes_de_validacion 
+          (id_gde, id_usuario, estado)
+        VALUES ($1, $2, 'E')
+        RETURNING *;
+      `, [id_gde, id_usuario]);
+    }
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no Encontrado",
+        message: `No se pudo crear/actualizar la solicitud`
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error('Error al procesar la solicitud', err);
+    res.status(500).json({
+      error: 'Error al procesar la solicitud',
+      details: err.message
+    });
+  }
+}
 
 //GET guías en revisión PROF
 export const obtenerGuiasEnRevision = async (req, res) => {
