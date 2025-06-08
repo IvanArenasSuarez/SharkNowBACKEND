@@ -54,6 +54,55 @@ export const guardarGuia = async (req, res) => {
         [guia.tipo, guia.nombre, guia.descripcion, userId, guia.materia, guia.plan, guia.version, guia.estado]
       );
       id_guia = result.rows[0].id_gde;
+      
+      // 1. Contar cuántas guías ha creado el usuario
+      const { rows: totalGuiasRows } = await client.query(`Add commentMore actions
+        SELECT COUNT(*)::int AS total
+        FROM guias_de_estudio
+        WHERE id_usuario = $1
+      `, [userId]);
+
+      const totalGuias = totalGuiasRows[0].total;
+
+      // 2. Verificar si toca recompensa (primera guía o múltiplo de 3)
+      if (totalGuias === 1 || totalGuias % 3 === 0) {
+        // 3. Obtener recompensas actuales del usuario
+        const { rows: usuarioRows } = await client.query(`
+          SELECT recompensas
+          FROM usuarios
+          WHERE id_usuario = $1
+        `, [userId]);
+
+        const recompensasActuales = usuarioRows[0].recompensas || [];
+
+        // 4. Buscar recompensas tipo 2 o 4 que no tenga el usuario
+        const { rows: recompensasDisponibles } = await client.query(`
+          SELECT id_recompensa, nombre, tipo
+          FROM recompensas
+          WHERE tipo IN ('2', '4')
+            AND id_recompensa <> ALL($1::varchar[])
+        `, [recompensasActuales]);
+
+        if (recompensasDisponibles.length > 0) {
+          // 5. Elegir una al azar
+          const recompensa = recompensasDisponibles[Math.floor(Math.random() * recompensasDisponibles.length)];
+
+          // 6. Insertar recompensa para el usuario
+          await client.query(`
+            UPDATE usuarios
+            SET recompensas = array_append(recompensas, $1)
+            WHERE id_usuario = $2
+          `, [recompensa.id_recompensa, userId]);
+
+          // 7. Puedes devolver esta recompensa en la respuesta para mostrar al usuario
+          res.locals.recompensaNueva = {
+            id: recompensa.id_recompensa,
+            nombre: recompensa.nombre,
+            tipo: recompensa.tipo === '2' ? 'Insignias' : 'Tiburones'
+          };
+        }
+      }
+  
     } else {
       // Actualizar guía existente
       await client.query(

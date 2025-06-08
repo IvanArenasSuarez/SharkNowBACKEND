@@ -54,9 +54,19 @@ export const crearCuenta = async (req, res) => {
         const hashedPassword = await bcrypt.hash(contrasena, 10);
         const desc = "Bienvenido a SharkNow";
 
+        const recompensasIniciales = [
+          'T001', 'T002', 'T003',
+          'S001', 'S002', 'S003',
+          'M001', 'M002', 'M003',
+          'I001', 'I002', 'I003'
+        ];
+
         const { rows } = await cliente.query(
-            "INSERT INTO usuarios (nombre, apellidos ,correo, tipo, contrasena, descripcion, estado) VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING *",
-            [nombre, apellidos, correo, tipo, hashedPassword, desc]
+            `INSERT INTO usuarios (Add commentMore actions
+            nombre, apellidos, correo, tipo, contrasena, descripcion, recompensas
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *`,
+            [nombre, apellidos, correo, tipo, hashedPassword, desc, recompensasIniciales]
         );
 
         const userId = rows[0].id_usuario;
@@ -1499,5 +1509,53 @@ export const eliminarCuentaUsuario = async (req, res) => {
         client.release();
     }
 };
+
+export const obtenerNotificaciones = [
+  verifyToken, // middleware para validar token y obtener req.userId
+  async (req, res) => {
+    const id_usuario = req.userId;
+
+    try {
+      const resultado = await pool.query(
+        `SELECT id_notificacion, descripcion FROM notificaciones WHERE id_usuario = $1`,
+        [id_usuario]
+      );
+
+      const notificaciones = resultado.rows.map(n => ({
+        id: n.id_notificacion,
+        ...n.descripcion
+      }));
+      console.log(notificaciones);
+      res.json(notificaciones);
+    } catch (error) {
+      console.error("Error al obtener notificaciones:", error);
+      res.status(500).json({ error: "Error al obtener notificaciones" });
+    }
+  }
+];
+
+export const eliminarNotificacion = async (req, res) => {
+  const id_usuario = req.userId;
+  const id_notificacion = req.params.id;
+
+  try {
+    // Asegura que la notificación sea del usuario
+    const result = await pool.query(
+      'DELETE FROM notificaciones WHERE id_notificacion = $1 AND id_usuario = $2 RETURNING *',
+      [id_notificacion, id_usuario]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Notificación no encontrada o no pertenece al usuario.' });
+    }
+
+    res.json({ success: true, message: 'Notificación eliminada correctamente.' });
+  } catch (error) {
+    console.error("Error al eliminar notificación:", error);
+    res.status(500).json({ error: 'Error al eliminar notificación.' });
+  }
+};
+
+
 
 export { verifyToken };
