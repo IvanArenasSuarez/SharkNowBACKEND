@@ -8,21 +8,19 @@ const SECRET_KEY = "secreto_super_seguro"; // Cambia esto <-
 // Middleware para verificar el token JWT
 const verifyToken = (req, res, next) => {
     const token = req.header('Authorization')?.split(' ')[1];
-  
+
     if (!token) {
-      return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
+        return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
     }
-  
+
     try {
         const decoded = jwt.verify(token, SECRET_KEY);
         req.userId = decoded.id_usuario; // Extraemos el ID del usuario desde el token
         next(); // Procedemos a la siguiente función
     } catch (error) {
-      return res.status(401).json({ message: 'Token no válido.' });
+        return res.status(401).json({ message: 'Token no válido.' });
     }
-  };
-  
-
+};
 
 //GET Cuentas
 export const getCuentas = async (req, res) => {
@@ -62,13 +60,13 @@ export const crearCuenta = async (req, res) => {
           'M001', 'M002', 'M003',
           'I001', 'I002', 'I003'
         ];
-        
+
         const { rows } = await cliente.query(
-          `INSERT INTO usuarios (
+            `INSERT INTO usuarios (Add commentMore actions
             nombre, apellidos, correo, tipo, contrasena, descripcion, recompensas
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          RETURNING *`,
-          [nombre, apellidos, correo, tipo, hashedPassword, desc, recompensasIniciales]
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *`,
+            [nombre, apellidos, correo, tipo, hashedPassword, desc, recompensasIniciales]
         );
 
         const userId = rows[0].id_usuario;
@@ -243,7 +241,8 @@ export const loginCuenta = async (req, res) => {
                 contrasena,
                 tipo,
                 descripcion,
-                recompensas
+                recompensas,
+                estado
                 FROM usuarios
             WHERE correo = $1;
             `,
@@ -268,26 +267,32 @@ export const loginCuenta = async (req, res) => {
             return res.status(401).json({ message: "Credenciales inválidas" });
         }
 
+        if (!user.estado) {
+            console.log("El acceso a esta cuenta ha sido denegado");
+            return res.status(401).json({ message: "Acceso denegado" });
+        }
+
         // Eliminar la contraseña antes de firmar el token
         delete user.contraseña;
 
         let academias = [];
 
         if (user.tipo === 2) {
-        const result = await pool.query(
-          `SELECT id_academia, jefe
+            const result = await pool.query(
+                `SELECT id_academia, jefe
            FROM profesor_academia
            WHERE id_usuario = $1`,
-          [user.id_usuario]
-        );
+                [user.id_usuario]
+            );
 
-        academias = result.rows.map(a => ({
-          id: a.id_academia,
-          jefe: a.jefe
-        }));
-      }
+            academias = result.rows.map(a => ({
+                id: a.id_academia,
+                jefe: a.jefe
+            }));
+        }
 
         // Generar el token incluyendo la información del usuario y la empresa
+
         const token = jwt.sign(
             {
                 id_usuario: user.id_usuario,
@@ -313,119 +318,118 @@ export const loginCuenta = async (req, res) => {
     }
 };
 
-
 //GET Recompensas para el avatar  
 
 export const getRecompensasDesdeDB = async (req, res) => {
-  const { id_usuario } = req.body;
+    const { id_usuario } = req.body;
 
-  try {
-    const user = await pool.query(
-      "SELECT recompensas FROM usuarios WHERE id_usuario = $1",
-      [id_usuario]
-    );
+    try {
+        const user = await pool.query(
+            "SELECT recompensas FROM usuarios WHERE id_usuario = $1",
+            [id_usuario]
+        );
 
-    if (user.rows.length === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+        if (user.rows.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+
+        const recompensas = user.rows[0].recompensas;
+
+        if (!recompensas || recompensas.length === 0) {
+            return res.json({
+                sombreros: [],
+                tiburones: [],
+                marcos: [],
+                insignias: [],
+            });
+        }
+
+        const { rows } = await pool.query(
+            "SELECT id_recompensa, nombre, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1)",
+            [recompensas]
+        );
+
+        const agrupadas = {
+            sombreros: [],
+            tiburones: [],
+            marcos: [],
+            insignias: [],
+        };
+
+        for (const r of rows) {
+            const imgBase64 = `data:image/png;base64,${r.archivo}`;
+            switch (r.tipo) {
+                case '1': agrupadas.sombreros.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+                case '2': agrupadas.tiburones.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+                case '3': agrupadas.marcos.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+                case '4': agrupadas.insignias.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
+            }
+        }
+
+        res.json(agrupadas);
+    } catch (error) {
+        console.error("Error al obtener recompensas:", error);
+        res.status(500).json({ message: "Error del servidor" });
     }
-
-    const recompensas = user.rows[0].recompensas;
-
-    if (!recompensas || recompensas.length === 0) {
-      return res.json({
-        sombreros: [],
-        tiburones: [],
-        marcos: [],
-        insignias: [],
-      });
-    }
-
-    const { rows } = await pool.query(
-      "SELECT id_recompensa, nombre, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1)",
-      [recompensas]
-    );
-
-    const agrupadas = {
-      sombreros: [],
-      tiburones: [],
-      marcos: [],
-      insignias: [],
-    };
-
-    for (const r of rows) {
-      const imgBase64 = `data:image/png;base64,${r.archivo}`;
-      switch (r.tipo) {
-        case '1': agrupadas.sombreros.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
-        case '2': agrupadas.tiburones.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
-        case '3': agrupadas.marcos.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
-        case '4': agrupadas.insignias.push({ id: r.id_recompensa, nombre: r.nombre, archivo: imgBase64 }); break;
-      }
-    }
-    
-    res.json(agrupadas);
-  } catch (error) {
-    console.error("Error al obtener recompensas:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
 };
 
 // POST /avatar/guardar-imagen
 export const guardarAvatarConImagen = async (req, res) => {
-  try {
-    const { id_usuario, id_sombrero, id_marco, id_insignia, id_tiburon } = req.body;
+    try {
+        const { id_usuario, id_sombrero, id_marco, id_insignia, id_tiburon } = req.body;
 
-    // 1. Obtener imágenes base64 desde la tabla recompensas
-    const recompensas = await pool.query(
-      "SELECT id_recompensa, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1::text[])",
-      [[id_sombrero, id_marco, id_insignia, id_tiburon]]
-    );
+        // 1. Obtener imágenes base64 desde la tabla recompensas
+        const recompensas = await pool.query(
+            "SELECT id_recompensa, tipo, ENCODE(archivo, 'base64') as archivo FROM recompensas WHERE id_recompensa = ANY($1::text[])",
+            [[id_sombrero, id_marco, id_insignia, id_tiburon]]
+        );
 
-    // 2. Clasificar imágenes
-    let sombrero, marco, insignia, tiburon;
-    for (const r of recompensas.rows) {
-      const img = `data:image/png;base64,${r.archivo}`;
-      switch (r.tipo) {
-        case '1': sombrero = img; break;
-        case '2': tiburon = img; break;
-        case '3': marco = img; break;
-        case '4': insignia = img; break;
-      }
-    }
+        // 2. Clasificar imágenes
+        let sombrero, marco, insignia, tiburon;
+        for (const r of recompensas.rows) {
+            const img = `data:image/png;base64,${r.archivo}`;
+            switch (r.tipo) {
+                case '1': sombrero = img; break;
+                case '2': tiburon = img; break;
+                case '3': marco = img; break;
+                case '4': insignia = img; break;
+            }
+        }
 
-    // 3. Crear canvas
-    const canvasSize = 224; // 56*4
-    const canvas = createCanvas(canvasSize, canvasSize);
-    const ctx = canvas.getContext('2d');
+        // 3. Crear canvas
+        const canvasSize = 224; // 56*4
+        const canvas = createCanvas(canvasSize, canvasSize);
+        const ctx = canvas.getContext('2d');
 
-    // 4. Cargar imágenes y dibujarlas
-    const drawIfExists = async (imgBase64) => {
-      if (!imgBase64) return;
-      const response = await fetch(imgBase64);
-      const buffer = await response.buffer();
-      const img = await loadImage(buffer);
-      ctx.drawImage(img, 0, 0, canvasSize, canvasSize);
-    };
-    await drawIfExists(marco);
-    await drawIfExists(tiburon);
-    await drawIfExists(sombrero);
-    // Dibujo de insignia más pequeña y centrada abajo
-    if (insignia) {
-      const response = await fetch(insignia);
-      const buffer = await response.buffer();
-      const img = await loadImage(buffer);
+        // 4. Cargar imágenes y dibujarlas
+        const drawIfExists = async (imgBase64) => {
+            if (!imgBase64) return;
+            const response = await fetch(imgBase64);
+            const buffer = await response.buffer();
+            const img = await loadImage(buffer);
+            ctx.drawImage(img, 0, 0, canvasSize, canvasSize);
+        };
+        await drawIfExists(marco);
+        await drawIfExists(tiburon);
+        await drawIfExists(sombrero);
+        // Dibujo de insignia más pequeña y centrada abajo
+        if (insignia) {
+            const response = await fetch(insignia);
+            const buffer = await response.buffer();
+            const img = await loadImage(buffer);
 
-      const insigniaSize = 56;
-      const x = (canvasSize - insigniaSize) / 2;
-      const y = canvasSize - insigniaSize - 4; // un poco más arriba del borde inferior
-      ctx.drawImage(img, x, y, insigniaSize, insigniaSize);
-    }
-    
+            const insigniaSize = 56;
+            const x = (canvasSize - insigniaSize) / 2;
+            const y = canvasSize - insigniaSize - 4; // un poco más arriba del borde inferior
+            ctx.drawImage(img, x, y, insigniaSize, insigniaSize);
+        }
 
-    // 5. Convertir canvas a buffer
-    const finalBuffer = canvas.toBuffer('image/png');
 
-    // 6. Actualizar la tabla avatar
-    await pool.query(`
+        // 5. Convertir canvas a buffer
+        const finalBuffer = canvas.toBuffer('image/png');
+
+        // 6. Actualizar la tabla avatar
+        await pool.query(`
       INSERT INTO avatar (
         id_user, id_sombrero, id_marco, id_insignia, id_tiburon, imagen
       ) VALUES ($1, $2, $3, $4, $5, $6)
@@ -436,142 +440,142 @@ export const guardarAvatarConImagen = async (req, res) => {
         id_tiburon = EXCLUDED.id_tiburon,
         imagen = EXCLUDED.imagen
     `, [id_usuario, id_sombrero, id_marco, id_insignia, id_tiburon, finalBuffer]);
-    
-    
 
-    res.status(200).json({ message: "Avatar actualizado con imagen" });
 
-  } catch (error) {
-    console.error("Error al generar y guardar la imagen del avatar:", error);
-    res.status(500).json({ message: "Error interno al guardar imagen" });
-  }
+
+        res.status(200).json({ message: "Avatar actualizado con imagen" });
+
+    } catch (error) {
+        console.error("Error al generar y guardar la imagen del avatar:", error);
+        res.status(500).json({ message: "Error interno al guardar imagen" });
+    }
 };
 
 // GET /avatar/seleccion?id_usuario=1
 export const obtenerAvatarSeleccion = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  try {
-    const { rows } = await pool.query(
-      `SELECT id_sombrero, id_marco, id_insignia, id_tiburon 
+    try {
+        const { rows } = await pool.query(
+            `SELECT id_sombrero, id_marco, id_insignia, id_tiburon 
        FROM avatar 
        WHERE id_user = $1`,
-      [id_usuario]
-    );
+            [id_usuario]
+        );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "No hay selección de avatar" });
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "No hay selección de avatar" });
+        }
+
+        res.json(rows[0]);
+    } catch (error) {
+        console.error("Error al obtener selección del avatar:", error);
+        res.status(500).json({ message: "Error del servidor" });
     }
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error("Error al obtener selección del avatar:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
 };
 
 // GET /avatar/imagen?id_usuario=1
 export const obtenerImagenAvatar = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  try {
-    const { rows } = await pool.query(
-      "SELECT imagen FROM avatar WHERE id_user = $1",
-      [id_usuario]
-    );
+    try {
+        const { rows } = await pool.query(
+            "SELECT imagen FROM avatar WHERE id_user = $1",
+            [id_usuario]
+        );
 
-    if (rows.length === 0 || !rows[0].imagen) {
-      return res.status(404).json({ message: "Imagen no encontrada para este avatar." });
+        if (rows.length === 0 || !rows[0].imagen) {
+            return res.status(404).json({ message: "Imagen no encontrada para este avatar." });
+        }
+
+        const buffer = rows[0].imagen;
+
+        // Establece los encabezados para devolver la imagen
+        res.setHeader("Content-Type", "image/png");
+        res.send(buffer);
+    } catch (error) {
+        console.error("Error al obtener la imagen del avatar:", error);
+        res.status(500).json({ message: "Error interno al obtener la imagen del avatar." });
     }
-
-    const buffer = rows[0].imagen;
-
-    // Establece los encabezados para devolver la imagen
-    res.setHeader("Content-Type", "image/png");
-    res.send(buffer);
-  } catch (error) {
-    console.error("Error al obtener la imagen del avatar:", error);
-    res.status(500).json({ message: "Error interno al obtener la imagen del avatar." });
-  }
 };
 
 export const obtenerDatosPerfil = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  try {
-    const result = await pool.query(
-      "SELECT nombre, apellidos, correo, tipo, descripcion FROM usuarios WHERE id_usuario = $1",
-      [id_usuario]
-    );
+    try {
+        const result = await pool.query(
+            "SELECT nombre, apellidos, correo, tipo, descripcion FROM usuarios WHERE id_usuario = $1",
+            [id_usuario]
+        );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error("Error al obtener los datos del perfil:", error);
+        res.status(500).json({ message: "Error del servidor" });
     }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error("Error al obtener los datos del perfil:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
 };
 
 // Actualizar datos del perfil
 export const actualizarDatosPerfil = async (req, res) => {
-  const { id_usuario, nombre, apellidos, descripcion } = req.body;
+    const { id_usuario, nombre, apellidos, descripcion } = req.body;
 
-  try {
-    const result = await pool.query(
-      `UPDATE usuarios 
+    try {
+        const result = await pool.query(
+            `UPDATE usuarios 
        SET nombre = $1, apellidos = $2, descripcion = $3
        WHERE id_usuario = $4`,
-      [nombre, apellidos, descripcion, id_usuario]
-    );
+            [nombre, apellidos, descripcion, id_usuario]
+        );
 
-    res.json({ mensaje: "Datos actualizados correctamente" });
-  } catch (error) {
-    console.error("Error al actualizar datos del perfil:", error);
-    res.status(500).json({ error: "Error al actualizar datos del perfil" });
-  }
+        res.json({ mensaje: "Datos actualizados correctamente" });
+    } catch (error) {
+        console.error("Error al actualizar datos del perfil:", error);
+        res.status(500).json({ error: "Error al actualizar datos del perfil" });
+    }
 };
 
 // GET /usuarios/autores
 export const buscarAutores = async (req, res) => {
-  const { busqueda, id_usuario } = req.query;
+    const { busqueda, id_usuario } = req.query;
 
-  try {
-    const values = [1, 2]; // Tipo 1 (alumno) y tipo 2 (profesor)
+    try {
+        const values = [1, 2]; // Tipo 1 (alumno) y tipo 2 (profesor)
 
-    let query = `
+        let query = `
       SELECT id_usuario, nombre, apellidos, descripcion
       FROM usuarios
       WHERE tipo = ANY($1) 
         AND id_usuario != $2
     `;
 
-    let params = [values, id_usuario];
+        let params = [values, id_usuario];
 
-    if (busqueda && busqueda.trim() !== "") {
-      query += ` AND (LOWER(nombre) LIKE LOWER($3) OR LOWER(apellidos) LIKE LOWER($3))`;
-      params.push(`%${busqueda}%`);
+        if (busqueda && busqueda.trim() !== "") {
+            query += ` AND (LOWER(nombre) LIKE LOWER($3) OR LOWER(apellidos) LIKE LOWER($3))`;
+            params.push(`%${busqueda}%`);
+        }
+
+        query += ` ORDER BY nombre ASC, apellidos ASC`;
+
+        const { rows } = await pool.query(query, params);
+
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al buscar autores:", error);
+        res.status(500).json({ message: "Error al buscar autores" });
     }
-
-    query += ` ORDER BY nombre ASC, apellidos ASC`;
-
-    const { rows } = await pool.query(query, params);
-
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar autores:", error);
-    res.status(500).json({ message: "Error al buscar autores" });
-  }
 };
 
 // GET /guias/buscar?nombre=xyz
 export const buscarGuiasPorNombre = async (req, res) => {
-  const { busqueda, id_usuario } = req.query;
+    const { busqueda, id_usuario } = req.query;
 
-  try {
-    let query = `
+    try {
+        let query = `
       SELECT 
         g.id_gde,
         g.nombre AS nombre,
@@ -594,31 +598,31 @@ export const buscarGuiasPorNombre = async (req, res) => {
         AND u.id_usuario != $1
     `;
 
-    const values = [id_usuario];
+        const values = [id_usuario];
 
-    if (busqueda) {
-      query += ` AND LOWER(g.nombre) LIKE LOWER($2)`;
-      values.push(`%${busqueda}%`);
+        if (busqueda) {
+            query += ` AND LOWER(g.nombre) LIKE LOWER($2)`;
+            values.push(`%${busqueda}%`);
+        }
+
+        query += ` ORDER BY g.nombre ASC`;
+
+        const { rows } = await pool.query(query, values);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al buscar guías por nombre:", error);
+        res.status(500).json({ message: "Error al buscar guías" });
     }
-
-    query += ` ORDER BY g.nombre ASC`;
-
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar guías por nombre:", error);
-    res.status(500).json({ message: "Error al buscar guías" });
-  }
 };
 
 
 // GET /guias/buscar-por-materia?nombre_materia=xyz
 export const buscarGuiasPorMateria = async (req, res) => {
-  const { nombre_materia, id_usuario } = req.query;
+    const { nombre_materia, id_usuario } = req.query;
 
-  try {
-    let values = [id_usuario];
-    let query = `
+    try {
+        let values = [id_usuario];
+        let query = `
       SELECT 
         g.id_gde,
         g.nombre AS nombre,
@@ -641,55 +645,55 @@ export const buscarGuiasPorMateria = async (req, res) => {
         AND u.id_usuario != $1
     `;
 
-    if (nombre_materia) {
-      const nombreLower = nombre_materia.toLowerCase();
-      if (nombreLower.includes('ex')) {
-        query += ` AND g.tipo = 'E'`;
-      } else {
-        // Filtro por nombre de materia
-        query += ` AND LOWER(m.nombre) LIKE LOWER($2)`;
-        values.push(`%${nombre_materia}%`);
-      }
+        if (nombre_materia) {
+            const nombreLower = nombre_materia.toLowerCase();
+            if (nombreLower.includes('ex')) {
+                query += ` AND g.tipo = 'E'`;
+            } else {
+                // Filtro por nombre de materia
+                query += ` AND LOWER(m.nombre) LIKE LOWER($2)`;
+                values.push(`%${nombre_materia}%`);
+            }
+        }
+
+        query += ` ORDER BY g.nombre ASC`;
+
+        const { rows } = await pool.query(query, values);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al buscar guías por materia:", error);
+        res.status(500).json({ message: "Error al buscar guías por materia" });
     }
-
-    query += ` ORDER BY g.nombre ASC`;
-
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar guías por materia:", error);
-    res.status(500).json({ message: "Error al buscar guías por materia" });
-  }
 };
 
 // GET /guias/sigue?id_usuario=1&id_gde=2
 export const verificarSiSigueGuia = async (req, res) => {
-  const { id_usuario, id_gde } = req.query;
+    const { id_usuario, id_gde } = req.query;
 
-  try {
-    const result = await pool.query(
-      `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2 AND estado = 'A'`,
-      [id_usuario, id_gde]
-    );
+    try {
+        const result = await pool.query(
+            `SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2 AND estado = 'A'`,
+            [id_usuario, id_gde]
+        );
 
-    if (result.rowCount === 0) {
-      return res.json({ sigue: false });
+        if (result.rowCount === 0) {
+            return res.json({ sigue: false });
+        }
+
+        const { mesirve } = result.rows[0];
+        return res.json({ sigue: true, mesirve });
+    } catch (error) {
+        console.error("Error al verificar seguimiento de guía:", error);
+        res.status(500).json({ message: "Error del servidor" });
     }
-
-    const { mesirve } = result.rows[0];
-    return res.json({ sigue: true, mesirve });
-  } catch (error) {
-    console.error("Error al verificar seguimiento de guía:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
 };
 
 // GET /guias/detalles?id_gde=1
 export const obtenerDetallesGuia = async (req, res) => {
-  const { id_gde } = req.query;
+    const { id_gde } = req.query;
 
-  try {
-    const { rows } = await pool.query(`
+    try {
+        const { rows } = await pool.query(`
       SELECT 
         g.nombre,
         g.descripcion,
@@ -711,199 +715,199 @@ export const obtenerDetallesGuia = async (req, res) => {
       WHERE g.id_gde = $1
     `, [id_gde]);
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Guía no encontrada" });
-    }
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Guía no encontrada" });
+        }
 
-    res.json(rows[0]);
-  } catch (error) {
-    console.error("Error al obtener detalles de la guía:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
-  }
+        res.json(rows[0]);
+    } catch (error) {
+        console.error("Error al obtener detalles de la guía:", error);
+        res.status(500).json({ message: "Error interno del servidor" });
+    }
 };
 
 export const seguirGuia = async (req, res) => {
-  const { id_usuario, id_gde } = req.body;
+    const { id_usuario, id_gde } = req.body;
 
-  try {
-    if (!id_usuario || !id_gde) {
-      return res.status(400).json({ message: "Faltan datos requeridos" });
+    try {
+        if (!id_usuario || !id_gde) {
+            return res.status(400).json({ message: "Faltan datos requeridos" });
+        }
+
+        // Verificar si ya existe un registro para ese usuario y guía
+        const { rowCount } = await pool.query(
+            `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
+            [id_usuario, id_gde]
+        );
+
+        if (rowCount > 0) {
+            // Si ya existe, solo actualiza el estado a 'A'
+            await pool.query(
+                `UPDATE progreso_de_guias SET estado = 'A' WHERE id_usuario = $1 AND id_gde = $2`,
+                [id_usuario, id_gde]
+            );
+        } else {
+            // Si no existe, inserta un nuevo registro
+            await pool.query(
+                `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
+                [id_usuario, id_gde]
+            );
+        }
+        // Incrementar el número de seguidores en guias_de_estudio
+        await pool.query(
+            `UPDATE guias_de_estudio SET num_seguidores = num_seguidores + 1 WHERE id_gde = $1`,
+            [id_gde]
+        );
+
+        res.status(200).json({ message: "Guía seguida exitosamente" });
+    } catch (error) {
+        console.error("Error al seguir la guía:", error);
+        res.status(500).json({ message: "Error al seguir la guía" });
     }
-
-    // Verificar si ya existe un registro para ese usuario y guía
-    const { rowCount } = await pool.query(
-      `SELECT 1 FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2`,
-      [id_usuario, id_gde]
-    );
-
-    if (rowCount > 0) {
-      // Si ya existe, solo actualiza el estado a 'A'
-      await pool.query(
-        `UPDATE progreso_de_guias SET estado = 'A' WHERE id_usuario = $1 AND id_gde = $2`,
-        [id_usuario, id_gde]
-      );
-    } else {
-      // Si no existe, inserta un nuevo registro
-      await pool.query(
-        `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
-        [id_usuario, id_gde]
-      );
-    }
-    // Incrementar el número de seguidores en guias_de_estudio
-    await pool.query(
-      `UPDATE guias_de_estudio SET num_seguidores = num_seguidores + 1 WHERE id_gde = $1`,
-      [id_gde]
-    );
-
-    res.status(200).json({ message: "Guía seguida exitosamente" });
-  } catch (error) {
-    console.error("Error al seguir la guía:", error);
-    res.status(500).json({ message: "Error al seguir la guía" });
-  }
 };
 
 export const marcarGuiaComoMeSirve = async (req, res) => {
-  const { id_usuario, id_gde } = req.body;
+    const { id_usuario, id_gde } = req.body;
 
-  if (!id_usuario || !id_gde) {
-    return res.status(400).json({ message: "Faltan datos requeridos." });
-  }
-
-  try {
-    // Verifica si ya está marcada como mesirve
-    const check = await pool.query(
-      "SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2",
-      [id_usuario, id_gde]
-    );
-
-    if (check.rows.length === 0) {
-      return res.status(404).json({ message: "No se encontró registro de seguimiento para esta guía." });
+    if (!id_usuario || !id_gde) {
+        return res.status(400).json({ message: "Faltan datos requeridos." });
     }
 
-    if (check.rows[0].mesirve === true) {
-      return res.status(400).json({ message: "La guía ya ha sido marcada como MeSirve." });
+    try {
+        // Verifica si ya está marcada como mesirve
+        const check = await pool.query(
+            "SELECT mesirve FROM progreso_de_guias WHERE id_usuario = $1 AND id_gde = $2",
+            [id_usuario, id_gde]
+        );
+
+        if (check.rows.length === 0) {
+            return res.status(404).json({ message: "No se encontró registro de seguimiento para esta guía." });
+        }
+
+        if (check.rows[0].mesirve === true) {
+            return res.status(400).json({ message: "La guía ya ha sido marcada como MeSirve." });
+        }
+
+        // Actualiza el estado de mesirve en progreso_de_guias
+        await pool.query(
+            "UPDATE progreso_de_guias SET mesirve = true WHERE id_usuario = $1 AND id_gde = $2",
+            [id_usuario, id_gde]
+        );
+
+        // Incrementa el contador en guias_de_estudio
+        await pool.query(
+            "UPDATE guias_de_estudio SET num_mesirve = num_mesirve + 1 WHERE id_gde = $1",
+            [id_gde]
+        );
+
+        res.status(200).json({ message: "MeSirve registrado correctamente." });
+
+    } catch (error) {
+        console.error("Error al marcar MeSirve:", error);
+        res.status(500).json({ message: "Error del servidor" });
     }
-
-    // Actualiza el estado de mesirve en progreso_de_guias
-    await pool.query(
-      "UPDATE progreso_de_guias SET mesirve = true WHERE id_usuario = $1 AND id_gde = $2",
-      [id_usuario, id_gde]
-    );
-
-    // Incrementa el contador en guias_de_estudio
-    await pool.query(
-      "UPDATE guias_de_estudio SET num_mesirve = num_mesirve + 1 WHERE id_gde = $1",
-      [id_gde]
-    );
-
-    res.status(200).json({ message: "MeSirve registrado correctamente." });
-
-  } catch (error) {
-    console.error("Error al marcar MeSirve:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
 };
 
 export const quitarMeSirve = async (req, res) => {
-  const { id_usuario, id_gde } = req.body;
+    const { id_usuario, id_gde } = req.body;
 
-  try {
-    await pool.query(`
+    try {
+        await pool.query(`
       UPDATE progreso_de_guias 
       SET mesirve = false 
       WHERE id_usuario = $1 AND id_gde = $2
     `, [id_usuario, id_gde]);
 
-    await pool.query(`
+        await pool.query(`
       UPDATE guias_de_estudio 
       SET num_mesirve = GREATEST(num_mesirve - 1, 0)
       WHERE id_gde = $1
     `, [id_gde]);
 
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Error al quitar MeSirve:", error);
-    res.status(500).json({ message: "Error al quitar MeSirve" });
-  }
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error("Error al quitar MeSirve:", error);
+        res.status(500).json({ message: "Error al quitar MeSirve" });
+    }
 };
 
 export const dejarDeSeguirGuia = async (req, res) => {
-  const { id_usuario, id_gde } = req.body;
+    const { id_usuario, id_gde } = req.body;
 
-  try {
-     
-    if (!id_usuario || !id_gde) {
-      return res.status(400).json({ message: "Faltan datos requeridos." });
-    }
+    try {
 
-    // Desactivamos el seguimiento poniendo estado = 'I'
-    await pool.query(
-      `UPDATE progreso_de_guias 
+        if (!id_usuario || !id_gde) {
+            return res.status(400).json({ message: "Faltan datos requeridos." });
+        }
+
+        // Desactivamos el seguimiento poniendo estado = 'I'
+        await pool.query(
+            `UPDATE progreso_de_guias 
        SET estado = 'I'
        WHERE id_usuario = $1 AND id_gde = $2`,
-      [id_usuario, id_gde]
-    );
+            [id_usuario, id_gde]
+        );
 
-    // Decrementamos el número de seguidores en guias_de_estudio
-    await pool.query(
-      `UPDATE guias_de_estudio 
+        // Decrementamos el número de seguidores en guias_de_estudio
+        await pool.query(
+            `UPDATE guias_de_estudio 
        SET num_seguidores = GREATEST(num_seguidores - 1, 0)
        WHERE id_gde = $1`,
-      [id_gde]
-    );
+            [id_gde]
+        );
 
-    res.status(200).json({ message: "Guía desactivada del seguimiento correctamente" });
-  } catch (error) {
-    console.error("Error al dejar de seguir guía:", error);
-    res.status(500).json({ message: "Error al dejar de seguir la guía" });
-  }
+        res.status(200).json({ message: "Guía desactivada del seguimiento correctamente" });
+    } catch (error) {
+        console.error("Error al dejar de seguir guía:", error);
+        res.status(500).json({ message: "Error al dejar de seguir la guía" });
+    }
 };
 
 export const registrarReporte = async (req, res) => {
-  const { id_usuario, id_gde, categoria, descripcion, id_quienreporto } = req.body;
+    const { id_usuario, id_gde, categoria, descripcion, id_quienreporto } = req.body;
 
-  if (!id_usuario || !id_gde || !categoria || !descripcion || !id_quienreporto) {
-    return res.status(400).json({ message: "Faltan datos requeridos." });
-  }
-
-  try {
-    // Validar si ya existe un reporte para esta guía, categoría y usuario que reporta
-    const existing = await pool.query(
-      `SELECT 1 FROM reportes 
-       WHERE id_gde = $1 AND categoria = $2 AND id_quienreporto = $3`,
-      [id_gde, categoria, id_quienreporto]
-    );
-
-    if (existing.rowCount > 0) {
-      return res.status(409).json({
-        message: "Ya has reportado esta guía por esa categoría.",
-      });
+    if (!id_usuario || !id_gde || !categoria || !descripcion || !id_quienreporto) {
+        return res.status(400).json({ message: "Faltan datos requeridos." });
     }
 
-    const fechaActual = new Date();
+    try {
+        // Validar si ya existe un reporte para esta guía, categoría y usuario que reporta
+        const existing = await pool.query(
+            `SELECT 1 FROM reportes 
+       WHERE id_gde = $1 AND categoria = $2 AND id_quienreporto = $3`,
+            [id_gde, categoria, id_quienreporto]
+        );
 
-    await pool.query(
-      `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado, id_quienreporto)
+        if (existing.rowCount > 0) {
+            return res.status(409).json({
+                message: "Ya has reportado esta guía por esa categoría.",
+            });
+        }
+
+        const fechaActual = new Date();
+
+        await pool.query(
+            `INSERT INTO reportes (id_usuario, id_gde, categoria, descripcion, fecha, estado, id_quienreporto)
        VALUES ($1, $2, $3, $4, $5, 'P', $6)`,
-      [id_usuario, id_gde, categoria, descripcion, fechaActual, id_quienreporto]
-    );
+            [id_usuario, id_gde, categoria, descripcion, fechaActual, id_quienreporto]
+        );
 
-    res.status(201).json({ message: "Reporte registrado correctamente." });
-  } catch (error) {
-    console.error("Error al registrar el reporte:", error);
-    res.status(500).json({ message: "Error al registrar el reporte." });
-  }
+        res.status(201).json({ message: "Reporte registrado correctamente." });
+    } catch (error) {
+        console.error("Error al registrar el reporte:", error);
+        res.status(500).json({ message: "Error al registrar el reporte." });
+    }
 };
 
 export const obtenerGuiasDeUsuario = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  if (!id_usuario) {
-    return res.status(400).json({ message: "Falta el parámetro id_usuario" });
-  }
+    if (!id_usuario) {
+        return res.status(400).json({ message: "Falta el parámetro id_usuario" });
+    }
 
-  try {
-    const query = `
+    try {
+        const query = `
       SELECT 
         g.id_gde,
         g.nombre AS nombre,
@@ -927,19 +931,19 @@ export const obtenerGuiasDeUsuario = async (req, res) => {
       ORDER BY g.nombre ASC;
     `;
 
-    const { rows } = await pool.query(query, [id_usuario]);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al obtener guías del usuario:", error);
-    res.status(500).json({ message: "Error al obtener guías del usuario." });
-  }
+        const { rows } = await pool.query(query, [id_usuario]);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener guías del usuario:", error);
+        res.status(500).json({ message: "Error al obtener guías del usuario." });
+    }
 };
 
 export const verificarJefeAcademia = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  try {
-    const result = await pool.query(`
+    try {
+        const result = await pool.query(`
       SELECT 
         a.id_academia,
         a.nombre AS nombre_academia,
@@ -954,253 +958,253 @@ export const verificarJefeAcademia = async (req, res) => {
       WHERE p1.id_usuario = $1
     `, [id_usuario]);
 
-    res.json(result.rows);
-  } catch (error) {
-    console.error("Error al verificar jefe de academia:", error);
-    res.status(500).json({ message: "Error al verificar jefe de academia" });
-  }
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Error al verificar jefe de academia:", error);
+        res.status(500).json({ message: "Error al verificar jefe de academia" });
+    }
 };
 
 export const asignarJefeAcademia = async (req, res) => {
-  const { id_usuario, id_academia } = req.body;
+    const { id_usuario, id_academia } = req.body;
 
-  if (!id_usuario || !id_academia) {
-    return res.status(400).json({ message: "Faltan datos requeridos." });
-  }
-
-  try {
-    // Verificar que el usuario esté en esa academia
-    const resultado = await pool.query(
-      `SELECT * FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
-      [id_usuario, id_academia]
-    );
-
-    if (resultado.rowCount === 0) {
-      return res.status(400).json({
-        message: "El usuario no pertenece a esta academia.",
-      });
+    if (!id_usuario || !id_academia) {
+        return res.status(400).json({ message: "Faltan datos requeridos." });
     }
 
-    // Verificar si ya existe un jefe en esa academia
-    const { rows: jefesExistentes } = await pool.query(
-      `SELECT * FROM profesor_academia WHERE id_academia = $1 AND jefe = true`,
-      [id_academia]
-    );
+    try {
+        // Verificar que el usuario esté en esa academia
+        const resultado = await pool.query(
+            `SELECT * FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
+            [id_usuario, id_academia]
+        );
 
-    if (jefesExistentes.length > 0) {
-      return res.status(400).json({
-        message: "Ya existe un jefe para esta academia.",
-      });
+        if (resultado.rowCount === 0) {
+            return res.status(400).json({
+                message: "El usuario no pertenece a esta academia.",
+            });
+        }
+
+        // Verificar si ya existe un jefe en esa academia
+        const { rows: jefesExistentes } = await pool.query(
+            `SELECT * FROM profesor_academia WHERE id_academia = $1 AND jefe = true`,
+            [id_academia]
+        );
+
+        if (jefesExistentes.length > 0) {
+            return res.status(400).json({
+                message: "Ya existe un jefe para esta academia.",
+            });
+        }
+
+        // Actualizar el registro para poner jefe = true
+        await pool.query(
+            `UPDATE profesor_academia SET jefe = true WHERE id_usuario = $1 AND id_academia = $2`,
+            [id_usuario, id_academia]
+        );
+
+        res.status(200).json({ message: "Jefe de academia asignado correctamente." });
+    } catch (error) {
+        console.error("Error al asignar jefe de academia:", error);
+        res.status(500).json({ message: "Error del servidor al asignar jefe." });
     }
-
-    // Actualizar el registro para poner jefe = true
-    await pool.query(
-      `UPDATE profesor_academia SET jefe = true WHERE id_usuario = $1 AND id_academia = $2`,
-      [id_usuario, id_academia]
-    );
-
-    res.status(200).json({ message: "Jefe de academia asignado correctamente." });
-  } catch (error) {
-    console.error("Error al asignar jefe de academia:", error);
-    res.status(500).json({ message: "Error del servidor al asignar jefe." });
-  }
 };
 
 // Eliminar jefe de academia
 export const quitarJefeAcademia = async (req, res) => {
-  const { id_usuario, id_academia } = req.body;
+    const { id_usuario, id_academia } = req.body;
 
-  if (!id_usuario || !id_academia) {
-    return res.status(400).json({ message: "Faltan datos requeridos." });
-  }
-
-  try {
-    // Actualizar jefe a false para ese usuario y academia
-    const result = await pool.query(
-      `UPDATE profesor_academia
-       SET jefe = false
-       WHERE id_usuario = $1 AND id_academia = $2`,
-      [id_usuario, id_academia]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Registro no encontrado." });
+    if (!id_usuario || !id_academia) {
+        return res.status(400).json({ message: "Faltan datos requeridos." });
     }
 
-    res.status(200).json({ message: "Jefatura eliminada correctamente." });
-  } catch (error) {
-    console.error("Error al quitar jefe:", error);
-    res.status(500).json({ message: "Error al quitar la característica de jefe." });
-  }
+    try {
+        // Actualizar jefe a false para ese usuario y academia
+        const result = await pool.query(
+            `UPDATE profesor_academia
+       SET jefe = false
+       WHERE id_usuario = $1 AND id_academia = $2`,
+            [id_usuario, id_academia]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Registro no encontrado." });
+        }
+
+        res.status(200).json({ message: "Jefatura eliminada correctamente." });
+    } catch (error) {
+        console.error("Error al quitar jefe:", error);
+        res.status(500).json({ message: "Error al quitar la característica de jefe." });
+    }
 };
 
 export const buscarJefeAcademia = async (req, res) => {
-  const { id_academia } = req.params;
-  try {
-    const result = await pool.query(
-      `SELECT u.nombre || ' ' || u.apellidos AS nombre_completo
+    const { id_academia } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT u.nombre || ' ' || u.apellidos AS nombre_completo
       FROM profesor_academia pa
       JOIN usuarios u ON pa.id_usuario = u.id_usuario
       WHERE pa.id_academia = $1 AND pa.jefe = true
       LIMIT 1`,
-      [id_academia]
-    );
-    if (result.rows.length === 0) {
-      return res.status(406).json({ error: 'Responsable no encontrado' });
-    }
+            [id_academia]
+        );
+        if (result.rows.length === 0) {
+            return res.status(406).json({ error: 'Responsable no encontrado' });
+        }
 
-    res.json({ nombre: result.rows[0].nombre_completo });
-  } catch (error) {
-    console.error('Error al obtener responsable:', error);
-    res.status(500).json({ error: 'Error del servidor' });
-  }
+        res.json({ nombre: result.rows[0].nombre_completo });
+    } catch (error) {
+        console.error('Error al obtener responsable:', error);
+        res.status(500).json({ error: 'Error del servidor' });
+    }
 };
 
 export const verificarTransferenciaJefe = async (req, res) => {
-  const { id_origen, id_destino } = req.query;
+    const { id_origen, id_destino } = req.query;
 
-  if (!id_origen || !id_destino) {
-    return res.status(400).json({ message: "Faltan parámetros requeridos." });
-  }
-
-  try {
-    // 1. Verificar que ambos sean tipo 2 (profesores)
-    const resultUsuarios = await pool.query(
-      `SELECT id_usuario, tipo FROM usuarios WHERE id_usuario IN ($1, $2)`,
-      [id_origen, id_destino]
-    );
-
-    if (resultUsuarios.rowCount !== 2 || resultUsuarios.rows.some(u => u.tipo !== 2)) {
-      return res.json({ puede_transferir: false, message: "Ambos usuarios deben ser profesores." });
+    if (!id_origen || !id_destino) {
+        return res.status(400).json({ message: "Faltan parámetros requeridos." });
     }
 
-    // 2. Obtener academias donde el origen es jefe
-    const academiasOrigen = await pool.query(
-      `SELECT id_academia FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
-      [id_origen]
-    );
+    try {
+        // 1. Verificar que ambos sean tipo 2 (profesores)
+        const resultUsuarios = await pool.query(
+            `SELECT id_usuario, tipo FROM usuarios WHERE id_usuario IN ($1, $2)`,
+            [id_origen, id_destino]
+        );
 
-    if (academiasOrigen.rowCount === 0) {
-      return res.json({ puede_transferir: false, message: "El usuario origen no es jefe en ninguna academia." });
+        if (resultUsuarios.rowCount !== 2 || resultUsuarios.rows.some(u => u.tipo !== 2)) {
+            return res.json({ puede_transferir: false, message: "Ambos usuarios deben ser profesores." });
+        }
+
+        // 2. Obtener academias donde el origen es jefe
+        const academiasOrigen = await pool.query(
+            `SELECT id_academia FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+            [id_origen]
+        );
+
+        if (academiasOrigen.rowCount === 0) {
+            return res.json({ puede_transferir: false, message: "El usuario origen no es jefe en ninguna academia." });
+        }
+
+        const idAcademiaJefe = academiasOrigen.rows[0].id_academia; // Solo puede ser jefe de una
+
+        // 3. Verificar si el destino pertenece a esa academia
+        const perteneceDestino = await pool.query(
+            `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
+            [id_destino, idAcademiaJefe]
+        );
+
+        if (perteneceDestino.rowCount === 0) {
+            return res.json({ puede_transferir: false, message: "El usuario destino no pertenece a la academia donde el origen es jefe." });
+        }
+
+        // 4. Verificar si el destino es jefe en alguna academia
+        const esJefeDestino = await pool.query(
+            `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
+            [id_destino]
+        );
+
+        if (esJefeDestino.rowCount > 0) {
+            return res.json({ puede_transferir: false, message: "El usuario destino ya es jefe en alguna academia." });
+        }
+
+        // 5. Obtener el nombre de la academia
+        const resultAcademia = await pool.query(
+            `SELECT nombre FROM academias WHERE id_academia = $1`,
+            [idAcademiaJefe]
+        );
+
+        const nombreAcademia = resultAcademia.rows[0]?.nombre || "Academia desconocida";
+
+        return res.json({
+            puede_transferir: true,
+            id_academia: idAcademiaJefe,
+            nombre_academia: nombreAcademia
+        });
+
+    } catch (error) {
+        console.error("Error al verificar transferencia de jefatura:", error);
+        res.status(500).json({ message: "Error al verificar transferencia de jefatura." });
     }
-
-    const idAcademiaJefe = academiasOrigen.rows[0].id_academia; // Solo puede ser jefe de una
-
-    // 3. Verificar si el destino pertenece a esa academia
-    const perteneceDestino = await pool.query(
-      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND id_academia = $2`,
-      [id_destino, idAcademiaJefe]
-    );
-
-    if (perteneceDestino.rowCount === 0) {
-      return res.json({ puede_transferir: false, message: "El usuario destino no pertenece a la academia donde el origen es jefe." });
-    }
-
-    // 4. Verificar si el destino es jefe en alguna academia
-    const esJefeDestino = await pool.query(
-      `SELECT 1 FROM profesor_academia WHERE id_usuario = $1 AND jefe = true`,
-      [id_destino]
-    );
-
-    if (esJefeDestino.rowCount > 0) {
-      return res.json({ puede_transferir: false, message: "El usuario destino ya es jefe en alguna academia." });
-    }
-
-    // 5. Obtener el nombre de la academia
-    const resultAcademia = await pool.query(
-      `SELECT nombre FROM academias WHERE id_academia = $1`,
-      [idAcademiaJefe]
-    );
-
-    const nombreAcademia = resultAcademia.rows[0]?.nombre || "Academia desconocida";
-
-    return res.json({
-      puede_transferir: true,
-      id_academia: idAcademiaJefe,
-      nombre_academia: nombreAcademia
-    });
-
-  } catch (error) {
-    console.error("Error al verificar transferencia de jefatura:", error);
-    res.status(500).json({ message: "Error al verificar transferencia de jefatura." });
-  }
 };
 
 // VERIFICAR ESTADO DE USUARIO (RESTRINGIDO)
 export const verificarEstadoUsuario = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  if (!id_usuario) {
-    return res.status(400).json({ message: "Falta el id_usuario." });
-  }
-
-  try {
-    const result = await pool.query(
-      `SELECT estado FROM usuarios WHERE id_usuario = $1`,
-      [id_usuario]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
+    if (!id_usuario) {
+        return res.status(400).json({ message: "Falta el id_usuario." });
     }
 
-    res.json({ estado: result.rows[0].estado }); // true o false
-  } catch (error) {
-    console.error("Error al verificar estado del usuario:", error);
-    res.status(500).json({ message: "Error al consultar el estado del usuario." });
-  }
+    try {
+        const result = await pool.query(
+            `SELECT estado FROM usuarios WHERE id_usuario = $1`,
+            [id_usuario]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado." });
+        }
+
+        res.json({ estado: result.rows[0].estado }); // true o false
+    } catch (error) {
+        console.error("Error al verificar estado del usuario:", error);
+        res.status(500).json({ message: "Error al consultar el estado del usuario." });
+    }
 };
 
 // RESTRINGIR ACCESO A USUARIO
 export const restringirAccesoUsuario = async (req, res) => {
-  const { id_usuario } = req.body;
+    const { id_usuario } = req.body;
 
-  if (!id_usuario) {
-    return res.status(400).json({ message: "Falta el id_usuario." });
-  }
+    if (!id_usuario) {
+        return res.status(400).json({ message: "Falta el id_usuario." });
+    }
 
-  try {
-    const result = await pool.query(
-      `UPDATE usuarios SET estado = false WHERE id_usuario = $1`,
-      [id_usuario]
-    );
+    try {
+        const result = await pool.query(
+            `UPDATE usuarios SET estado = false WHERE id_usuario = $1`,
+            [id_usuario]
+        );
 
-    res.json({ message: "Acceso restringido correctamente." });
-  } catch (error) {
-    console.error("Error al restringir acceso:", error);
-    res.status(500).json({ message: "Error al restringir acceso al usuario." });
-  }
+        res.json({ message: "Acceso restringido correctamente." });
+    } catch (error) {
+        console.error("Error al restringir acceso:", error);
+        res.status(500).json({ message: "Error al restringir acceso al usuario." });
+    }
 };
 
 // RESTAURAR ACCESO A USUARIO
 export const restaurarAcceso = async (req, res) => {
-  const { id_usuario } = req.body;
+    const { id_usuario } = req.body;
 
-  if (!id_usuario) {
-    return res.status(400).json({ message: "Falta el id del usuario." });
-  }
-
-  try {
-    const result = await pool.query(
-      `UPDATE usuarios SET estado = true WHERE id_usuario = $1`,
-      [id_usuario]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
+    if (!id_usuario) {
+        return res.status(400).json({ message: "Falta el id del usuario." });
     }
 
-    res.status(200).json({ message: "Acceso restaurado correctamente." });
-  } catch (error) {
-    console.error("Error al restaurar acceso:", error);
-    res.status(500).json({ message: "Error al restaurar el acceso del usuario." });
-  }
+    try {
+        const result = await pool.query(
+            `UPDATE usuarios SET estado = true WHERE id_usuario = $1`,
+            [id_usuario]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado." });
+        }
+
+        res.status(200).json({ message: "Acceso restaurado correctamente." });
+    } catch (error) {
+        console.error("Error al restaurar acceso:", error);
+        res.status(500).json({ message: "Error al restaurar el acceso del usuario." });
+    }
 };
 
 // Obtener reportes pendientes
 export const obtenerReportesPendientes = async (req, res) => {
-  try {
-    const query = `
+    try {
+        const query = `
       SELECT 
         r.id_reporte,
         g.id_gde,
@@ -1218,20 +1222,20 @@ export const obtenerReportesPendientes = async (req, res) => {
       ORDER BY r.id_reporte DESC
     `;
 
-    const { rows } = await pool.query(query);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al obtener reportes pendientes:", error);
-    res.status(500).json({ message: "Error al obtener reportes" });
-  }
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener reportes pendientes:", error);
+        res.status(500).json({ message: "Error al obtener reportes" });
+    }
 };
 
 // Buscar reportes por nombre de guia
 export const buscarReportesPorNombre = async (req, res) => {
-  const { nombre, categoria } = req.query;
+    const { nombre, categoria } = req.query;
 
-  try {
-    let query = `
+    try {
+        let query = `
       SELECT 
         r.id_reporte,
         r.categoria,
@@ -1247,35 +1251,35 @@ export const buscarReportesPorNombre = async (req, res) => {
       WHERE r.estado = 'P'
     `;
 
-    const values = [];
-    let paramIndex = 1;
+        const values = [];
+        let paramIndex = 1;
 
-    if (nombre) {
-      query += ` AND LOWER(g.nombre) LIKE LOWER($${paramIndex})`;
-      values.push(`%${nombre}%`);
-      paramIndex++;
+        if (nombre) {
+            query += ` AND LOWER(g.nombre) LIKE LOWER($${paramIndex})`;
+            values.push(`%${nombre}%`);
+            paramIndex++;
+        }
+
+        if (categoria) {
+            query += ` AND r.categoria = $${paramIndex}`;
+            values.push(categoria);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY r.fecha ASC`;
+
+        const { rows } = await pool.query(query, values);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al buscar reportes:", error);
+        res.status(500).json({ message: "Error al buscar reportes" });
     }
-
-    if (categoria) {
-      query += ` AND r.categoria = $${paramIndex}`;
-      values.push(categoria);
-      paramIndex++;
-    }
-
-    query += ` ORDER BY r.fecha ASC`;
-
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al buscar reportes:", error);
-    res.status(500).json({ message: "Error al buscar reportes" });
-  }
 };
 
 // Mostrar lista negra
 export const obtenerListaNegra = async (req, res) => {
-  try {
-    const query = `
+    try {
+        const query = `
       SELECT 
         u.id_usuario,
         u.nombre,
@@ -1290,20 +1294,20 @@ export const obtenerListaNegra = async (req, res) => {
       ORDER BY total_reportes DESC;
     `;
 
-    const { rows } = await pool.query(query);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al obtener la lista negra:", error);
-    res.status(500).json({ message: "Error al obtener la lista negra." });
-  }
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener la lista negra:", error);
+        res.status(500).json({ message: "Error al obtener la lista negra." });
+    }
 };
 
 // Reportes anteriores para el perfil de usuario
 export const obtenerReportesAnteriores = async (req, res) => {
-  const { id_usuario } = req.query;
+    const { id_usuario } = req.query;
 
-  try {
-    const query = `
+    try {
+        const query = `
       SELECT 
         r.id_reporte,
         r.categoria,
@@ -1314,116 +1318,116 @@ export const obtenerReportesAnteriores = async (req, res) => {
       ORDER BY r.fecha ASC;
     `;
 
-    const values = [id_usuario];
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al obtener reportes anteriores:", error);
-    res.status(500).json({ message: "Error al obtener reportes anteriores" });
-  }
+        const values = [id_usuario];
+        const { rows } = await pool.query(query, values);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener reportes anteriores:", error);
+        res.status(500).json({ message: "Error al obtener reportes anteriores" });
+    }
 };
 
 export const rechazarReporte = async (req, res) => {
-  const { id_reporte } = req.body;
+    const { id_reporte } = req.body;
 
-  if (!id_reporte) {
-    return res.status(400).json({ error: "Falta el id_reporte" });
-  }
-
-  try {
-    const result = await pool.query(
-      "UPDATE reportes SET estado = 'R' WHERE id_reporte = $1",
-      [id_reporte]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Reporte no encontrado" });
+    if (!id_reporte) {
+        return res.status(400).json({ error: "Falta el id_reporte" });
     }
 
-    res.json({ message: "Reporte rechazado exitosamente" });
-  } catch (error) {
-    console.error("Error al rechazar el reporte:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
+    try {
+        const result = await pool.query(
+            "UPDATE reportes SET estado = 'R' WHERE id_reporte = $1",
+            [id_reporte]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Reporte no encontrado" });
+        }
+
+        res.json({ message: "Reporte rechazado exitosamente" });
+    } catch (error) {
+        console.error("Error al rechazar el reporte:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
 };
 
 export const aceptarReporte = async (req, res) => {
-  const { id_reporte, motivo } = req.body;
+    const { id_reporte, motivo } = req.body;
 
-  if (!id_reporte || !motivo || motivo.trim() === "") {
-    return res.status(400).json({ error: "Falta el id_reporte o el motivo es inválido" });
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    // Actualizar la tabla reportes
-    const updateReporte = await client.query(
-      "UPDATE reportes SET estado = 'A', motivo = $1 WHERE id_reporte = $2 RETURNING id_gde, id_usuario, categoria",
-      [motivo.trim(), id_reporte]
-    );
-
-    if (updateReporte.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Reporte no encontrado" });
+    if (!id_reporte || !motivo || motivo.trim() === "") {
+        return res.status(400).json({ error: "Falta el id_reporte o el motivo es inválido" });
     }
 
-    const { id_gde, id_usuario, categoria } = updateReporte.rows[0];
+    const client = await pool.connect();
 
-    // Actualizar la tabla guias_de_estudio
-    await client.query(
-      "UPDATE guias_de_estudio SET estado = 'N' WHERE id_gde = $1",
-      [id_gde]
-    );
+    try {
+        await client.query("BEGIN");
 
-    // Si la categoría es 'disc_odio' o 'cont_exp', actualizar la tabla usuarios
-    if (categoria === "disc_odio" || categoria === "cont_exp") {
-      await client.query(
-        "UPDATE usuarios SET estado = false WHERE id_usuario = $1",
-        [id_usuario]
-      );
+        // Actualizar la tabla reportes
+        const updateReporte = await client.query(
+            "UPDATE reportes SET estado = 'A', motivo = $1 WHERE id_reporte = $2 RETURNING id_gde, id_usuario, categoria",
+            [motivo.trim(), id_reporte]
+        );
+
+        if (updateReporte.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Reporte no encontrado" });
+        }
+
+        const { id_gde, id_usuario, categoria } = updateReporte.rows[0];
+
+        // Actualizar la tabla guias_de_estudio
+        await client.query(
+            "UPDATE guias_de_estudio SET estado = 'N' WHERE id_gde = $1",
+            [id_gde]
+        );
+
+        // Si la categoría es 'disc_odio' o 'cont_exp', actualizar la tabla usuarios
+        if (categoria === "disc_odio" || categoria === "cont_exp") {
+            await client.query(
+                "UPDATE usuarios SET estado = false WHERE id_usuario = $1",
+                [id_usuario]
+            );
+        }
+
+        if (categoria === "spam" || categoria === "disonancia") {
+            console.log("Es categoría spam o disonancia");
+            // NOTIFICAIONES
+        }
+
+        await client.query("COMMIT");
+        res.json({ message: "Reporte aceptado exitosamente" });
+    } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error al aceptar el reporte:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    } finally {
+        client.release();
     }
-
-     if (categoria === "spam" || categoria === "disonancia") {
-      console.log("Es categoría spam o disonancia");
-      // NOTIFICAIONES
-    }
-
-    await client.query("COMMIT");
-    res.json({ message: "Reporte aceptado exitosamente" });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error al aceptar el reporte:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  } finally {
-    client.release();
-  }
 };
 
 
 export const eliminarCuentaUsuario = async (req, res) => {
-  const { id_usuario } = req.body;
+    const { id_usuario } = req.body;
 
-  if (!id_usuario) {
-    return res.status(400).json({ error: "Falta el id_usuario" });
-  }
+    if (!id_usuario) {
+        return res.status(400).json({ error: "Falta el id_usuario" });
+    }
 
-  const client = await pool.connect();
+    const client = await pool.connect();
 
-  try {
-    await client.query("BEGIN");
+    try {
+        await client.query("BEGIN");
 
-    // Obtener todas las guías del usuario
-    const guiasResult = await client.query(
-      "SELECT id_gde FROM guias_de_estudio WHERE id_usuario = $1",
-      [id_usuario]
-    );
-    const idsGuia = guiasResult.rows.map(row => row.id_gde);
+        // Obtener todas las guías del usuario
+        const guiasResult = await client.query(
+            "SELECT id_gde FROM guias_de_estudio WHERE id_usuario = $1",
+            [id_usuario]
+        );
+        const idsGuia = guiasResult.rows.map(row => row.id_gde);
 
-    // Decrementar seguidores
-    await client.query(`
+        // Decrementar seguidores
+        await client.query(`
       UPDATE guias_de_estudio
       SET num_seguidores = num_seguidores - 1
       WHERE id_gde IN (
@@ -1432,8 +1436,8 @@ export const eliminarCuentaUsuario = async (req, res) => {
       )
     `, [id_usuario]);
 
-    // Decrementar mesirve
-    await client.query(`
+        // Decrementar mesirve
+        await client.query(`
       UPDATE guias_de_estudio
       SET num_mesirve = num_mesirve - 1
       WHERE id_gde IN (
@@ -1442,68 +1446,68 @@ export const eliminarCuentaUsuario = async (req, res) => {
       )
     `, [id_usuario]);
 
-    // Eliminar sde_salidas (por id_usuario o por guías)
-    await client.query(`
+        // Eliminar sde_salidas (por id_usuario o por guías)
+        await client.query(`
       DELETE FROM sde_salidas
       WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
     `, [id_usuario, idsGuia]);
 
-    // Eliminar sesion_de_estudio (por id_usuario o guías)
-    await client.query(`
+        // Eliminar sesion_de_estudio (por id_usuario o guías)
+        await client.query(`
       DELETE FROM sesion_de_estudio
       WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
     `, [id_usuario, idsGuia]);
 
-    // Eliminar notificaciones (por id_usuario o guías)
-    await client.query(`
+        // Eliminar notificaciones (por id_usuario o guías)
+        await client.query(`
       DELETE FROM notificaciones
       WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
     `, [id_usuario, idsGuia]);
 
-    // Eliminar progreso_de_guias (por id_usuario o guías)
-    await client.query(`
+        // Eliminar progreso_de_guias (por id_usuario o guías)
+        await client.query(`
       DELETE FROM progreso_de_guias
       WHERE id_usuario = $1 OR id_gde = ANY($2::bigint[])
     `, [id_usuario, idsGuia]);
 
-    // Eliminar reportes donde fue autor o quien reportó
-    await client.query(`
+        // Eliminar reportes donde fue autor o quien reportó
+        await client.query(`
       DELETE FROM reportes
       WHERE id_usuario = $1 OR id_quienreporto = $1
     `, [id_usuario]);
 
-    // Eliminar reactivos de las guías
-    await client.query(`
+        // Eliminar reactivos de las guías
+        await client.query(`
       DELETE FROM reactivos
       WHERE id_gde = ANY($1::bigint[])
     `, [idsGuia]);
 
-    // Eliminar guías del usuario
-    await client.query(`
+        // Eliminar guías del usuario
+        await client.query(`
       DELETE FROM guias_de_estudio
       WHERE id_usuario = $1
     `, [id_usuario]);
-    
-    // Eliminar avatar
-    await client.query("DELETE FROM avatar WHERE id_user = $1", [id_usuario]);
 
-    // Finalmente, eliminar el usuario
-    await client.query(`
+        // Eliminar avatar
+        await client.query("DELETE FROM avatar WHERE id_user = $1", [id_usuario]);
+
+        // Finalmente, eliminar el usuario
+        await client.query(`
       DELETE FROM usuarios
       WHERE id_usuario = $1
     `, [id_usuario]);
 
-    await client.query("COMMIT");
+        await client.query("COMMIT");
 
-    res.json({ message: "Cuenta y datos relacionados eliminados correctamente" });
+        res.json({ message: "Cuenta y datos relacionados eliminados correctamente" });
 
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error al eliminar la cuenta:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  } finally {
-    client.release();
-  }
+    } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error al eliminar la cuenta:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    } finally {
+        client.release();
+    }
 };
 
 export const obtenerNotificaciones = [
@@ -1551,6 +1555,7 @@ export const eliminarNotificacion = async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar notificación.' });
   }
 };
+
 
 
 export { verifyToken };

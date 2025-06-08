@@ -54,9 +54,9 @@ export const guardarGuia = async (req, res) => {
         [guia.tipo, guia.nombre, guia.descripcion, userId, guia.materia, guia.plan, guia.version, guia.estado]
       );
       id_guia = result.rows[0].id_gde;
-
+      
       // 1. Contar cuántas guías ha creado el usuario
-      const { rows: totalGuiasRows } = await client.query(`
+      const { rows: totalGuiasRows } = await client.query(`Add commentMore actions
         SELECT COUNT(*)::int AS total
         FROM guias_de_estudio
         WHERE id_usuario = $1
@@ -102,9 +102,7 @@ export const guardarGuia = async (req, res) => {
           };
         }
       }
-
-
-
+  
     } else {
       // Actualizar guía existente
       await client.query(
@@ -120,8 +118,8 @@ export const guardarGuia = async (req, res) => {
     // INSERTAR nuevas preguntas
     for (const p of preguntas.nuevas) {
       const tipo = p.type === "multipleChoice" ? "M" :
-                   p.type === "trueFalse" ? "T" :
-                   p.type === "matching" ? "C" : null;
+        p.type === "trueFalse" ? "T" :
+          p.type === "matching" ? "C" : null;
 
       const preguntaJson = { texto: p.question };
       const respuestasJson = p.options;
@@ -150,8 +148,8 @@ export const guardarGuia = async (req, res) => {
     // ACTUALIZAR preguntas editadas
     for (const p of preguntas.editadas) {
       const tipo = p.type === "multipleChoice" ? "M" :
-                   p.type === "trueFalse" ? "T" :
-                   p.type === "matching" ? "C" : null;
+        p.type === "trueFalse" ? "T" :
+          p.type === "matching" ? "C" : null;
 
       const preguntaJson = { texto: p.question };
       const respuestasJson = p.options;
@@ -297,160 +295,6 @@ export const obtenerGuiasSeguidas = async (req, res) => {
   }
 };
 
-export const eliminarGuia = async (req, res) => {
-    const idGuia = req.params.id;
-
-    try {
-        // 1. Verificar si existe y sus condiciones
-        const result = await pool.query(
-            'SELECT estado, num_seguidores FROM guias_de_estudio WHERE id_gde = $1',
-            [idGuia]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Guía no encontrada' });
-        }
-
-        const { estado, num_seguidores } = result.rows[0];
-
-        // 2. Validar condiciones para poder eliminar
-        if (estado === 'N' || (estado === 'P' && num_seguidores === 0)) {
-            // 3. Eliminar reactivos asociados
-            await pool.query('DELETE FROM reactivos WHERE id_gde = $1', [idGuia]);
-
-            // 4. Eliminar la guía
-            await pool.query('DELETE FROM guias_de_estudio WHERE id_gde = $1', [idGuia]);
-
-            return res.status(200).json({ message: 'Guía y reactivos eliminados correctamente' });
-        } else {
-            return res.status(400).json({ message: 'No se puede eliminar la guía: está publicada y tiene seguidores.' });
-        }
-    } catch (err) {
-        console.error('Error al eliminar la guía:', err);
-        return res.status(500).json({ message: 'Error del servidor' });
-    }
-};
-
-export const obtenerParametros = async (req, res) => {
-  const userId = req.userId;
-  try {
-    const client = await pool.connect();
-
-    const [materias, academias, plan] = await Promise.all([
-      client.query(`
-        SELECT 
-          m.id_materias, 
-          m.nombre, 
-          m.id_academia,
-          m.id_pde
-        FROM materias m`),
-      client.query('SELECT id_academia, nombre FROM academias'),
-      client.query('SELECT id_pde, nombre, anio FROM planes_de_estudio')
-    ]);
-
-    client.release();
-
-    res.json({
-      materias: materias.rows,
-      academias: academias.rows,
-      plan: plan.rows
-    });
-  }
-  catch (err) {
-    console.error('Error al obtener las opciones', err);
-    res.status(500).json({ error: 'Error al obtener las opciones' });
-  }
-};
-
-//GET guías en revisión PROF
-export const obtenerGuiasEnRevision = async (req, res) => {
-  const userId = req.userId; // Obtiene el ID del usuario del token
-
-  try {
-    const result = await pool.query(
-      `SELECT 
-        sv.id_solicitud,
-        sv.id_gde,
-        sv.estado,
-        sv.motivo_de_rechazo,
-        g.tipo,
-        g.nombre AS nombre,
-        g.descripcion,
-        g.id_materia,
-        g.id_pde,
-        g.num_seguidores,
-        g.version,
-        g.estado AS guia_estado
-      FROM 
-        solicitudes_de_validacion sv
-      JOIN
-        guias_de_estudio g ON sv.id_gde = g.id_gde
-      WHERE 
-        sv.id_usuario = $1`, [userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'No se encontraron solicitudes de revisión' });
-    }
-
-    res.json(result.rows);
-  }
-  catch (err) {
-    console.error('Error al obtener las guías en revisión', err);
-    res.status(500).json({ error: 'Error al obtener las guías en revisión' });
-  }
-};
-
-//GET guias en revisión ACADEMIA
-export const obtenerGuiasEnRevisionAcad = async (req, res) => {
-  const { id_academia } = req.query;
-  try {
-    const result = await pool.query(
-      `SELECT 
-        sv.id_solicitud,
-        sv.id_gde,
-        sv.estado,
-        us.nombre AS nombre_usuario,
-        us.apellidos AS apellidos,
-        gde.tipo,
-        gde.nombre AS nombre_guia,
-        gde.descripcion AS descripcion,
-        gde.id_materia,
-        gde.id_pde,
-        gde.version,
-        m.nombre AS nombre_materia,
-        gde.estado AS guia_estado,
-        aca.nombre AS nombre_academia,
-        pde.nombre AS nombre_pde
-      FROM 
-        solicitudes_de_validacion sv
-      JOIN 
-        guias_de_estudio gde ON sv.id_gde = gde.id_gde
-      JOIN 
-        materias m ON gde.id_materia = m.id_materias
-      JOIN
-        academias aca ON m.id_academia = aca.id_academia
-      JOIN
-        planes_de_estudio pde ON m.id_pde = pde.id_pde
-      JOIN
-        usuarios us ON gde.id_usuario = us.id_usuario
-      WHERE 
-        m.id_academia = $1
-        AND sv.estado = 'E'`,
-      [id_academia]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(400).json({ message: 'No hay guías en solicitud de revisión' });
-    }
-    res.json(result.rows);
-  }
-  catch (err) {
-    console.error('Error al obtener las guías en revisión', err);
-    res.status(500).json({ error: 'Error al obtener las guias en revisión' });
-  }
-};
-
 //GET Obtener la información de las sesiones programadas
 export const obtenerInfoProgreso = async (req, res) => {
   const { id_gde, id_usuario } = req.query;
@@ -525,6 +369,252 @@ export const actualizarInfoProgreso = async (req, res) => {
       error: 'Error al actualizar los datos del progreso de guias',
       details: err.message
     });
+  }
+};
+
+export const eliminarGuia = async (req, res) => {
+  const idGuia = req.params.id;
+
+  try {
+    // 1. Verificar si existe y sus condiciones
+    const result = await pool.query(
+      'SELECT estado, num_seguidores FROM guias_de_estudio WHERE id_gde = $1',
+      [idGuia]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Guía no encontrada' });
+    }
+
+    const { estado, num_seguidores } = result.rows[0];
+
+    // 2. Validar condiciones para poder eliminar
+    if (estado === 'N' || (estado === 'P' && num_seguidores === 0)) {
+      // 3. Eliminar reactivos asociados
+      await pool.query('DELETE FROM reactivos WHERE id_gde = $1', [idGuia]);
+      // 4. Elimina las solicitudes de validacion
+      await pool.query('DELETE FROM solicitudes_de_validacion WHERE id_gde = $1', [idGuia]);
+      // 5. Eliminar la guía
+      await pool.query('DELETE FROM guias_de_estudio WHERE id_gde = $1', [idGuia]);
+
+      return res.status(200).json({ message: 'Guía y reactivos eliminados correctamente' });
+    } else {
+      return res.status(400).json({ message: 'No se puede eliminar la guía: está publicada y tiene seguidores.' });
+    }
+  } catch (err) {
+    console.error('Error al eliminar la guía:', err);
+    return res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+
+export const obtenerParametros = async (req, res) => {
+  const userId = req.userId;
+  try {
+    const client = await pool.connect();
+
+    const [materias, academias, plan] = await Promise.all([
+      client.query(`
+        SELECT 
+          m.id_materias, 
+          m.nombre, 
+          m.id_academia,
+          m.id_pde
+        FROM materias m`),
+      client.query('SELECT id_academia, nombre FROM academias'),
+      client.query('SELECT id_pde, nombre, anio FROM planes_de_estudio')
+    ]);
+
+    client.release();
+
+    res.json({
+      materias: materias.rows,
+      academias: academias.rows,
+      plan: plan.rows
+    });
+  }
+  catch (err) {
+    console.error('Error al obtener las opciones', err);
+    res.status(500).json({ error: 'Error al obtener las opciones' });
+  }
+};
+
+//PUT Actualizar el estado de la guía de estudio
+export const publicarGuia = async (req, res) => {
+  const { id_gde } = req.body;
+
+  try {
+    const result = await pool.query(`
+      UPDATE
+        guias_de_estudio
+      SET
+        estado = 'P'
+      WHERE
+        id_gde = $1
+      RETURNING
+        *;
+    `, [id_gde]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no Encontrado",
+        message: `No se encontró la guia con id: ${id_gde} Verifica los IDs.`
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  }
+  catch (err) {
+    console.error('Error al publicar la guía de estudio', err);
+    res.status(500).json({
+      error: 'Error al publicar la guía de estudio',
+      details: err.message
+    });
+  }
+}
+
+//POST Crear solicitud de validación por Academia
+export const enviarSolicitud = async (req, res) => {
+  const { id_usuario, id_gde } = req.body;
+  try {
+    // Primero verificar si ya existe
+    const existe = await pool.query(
+      `SELECT 1 FROM solicitudes_de_validacion 
+        WHERE id_gde = $1 AND id_usuario = $2`,
+      [id_gde, id_usuario]
+    );
+
+    let result;
+    if (existe.rowCount > 0) {
+      // Actualizar si existe
+      result = await pool.query(`
+        UPDATE solicitudes_de_validacion
+        SET estado = 'E',
+            motivo_de_rechazo = NULL
+        WHERE id_gde = $1 AND id_usuario = $2
+        RETURNING *;
+      `, [id_gde, id_usuario]);
+    } else {
+      // Insertar si no existe
+      result = await pool.query(`
+        INSERT INTO solicitudes_de_validacion 
+          (id_gde, id_usuario, estado)
+        VALUES ($1, $2, 'E')
+        RETURNING *;
+      `, [id_gde, id_usuario]);
+    }
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Registro no Encontrado",
+        message: `No se pudo crear/actualizar la solicitud`
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error('Error al procesar la solicitud', err);
+    res.status(500).json({
+      error: 'Error al procesar la solicitud',
+      details: err.message
+    });
+  }
+}
+
+//GET guías en revisión PROF
+export const obtenerGuiasEnRevision = async (req, res) => {
+  const userId = req.userId; // Obtiene el ID del usuario del token
+
+  try {
+    const result = await pool.query(
+      `SELECT 
+        sv.id_solicitud,
+        sv.id_gde,
+        sv.estado,
+        sv.motivo_de_rechazo,
+        g.tipo,
+        g.nombre AS nombre,
+        g.descripcion,
+        g.id_materia,
+        g.id_pde,
+        g.num_seguidores,
+        g.version,
+        g.estado AS guia_estado
+      FROM 
+        solicitudes_de_validacion sv
+      JOIN
+        guias_de_estudio g ON sv.id_gde = g.id_gde
+      WHERE 
+        sv.id_usuario = $1`, [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron solicitudes de revisión' });
+    }
+
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al obtener las guías en revisión', err);
+    res.status(500).json({ error: 'Error al obtener las guías en revisión' });
+  }
+};
+
+//GET guias en revisión ACADEMIA
+export const obtenerGuiasEnRevisionAcad = async (req, res) => {
+  const { id_academia } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT 
+        sv.id_solicitud,
+        sv.id_gde,
+        sv.estado,
+        us.id_usuario AS id_usuario,
+        us.nombre AS nombre_usuario,
+        us.apellidos AS apellidos,
+        gde.tipo,
+        gde.nombre AS nombre_guia,
+        gde.descripcion AS descripcion,
+        gde.id_materia,
+        gde.id_pde,
+        gde.version,
+        m.nombre AS nombre_materia,
+        gde.estado AS guia_estado,
+        aca.nombre AS nombre_academia,
+        pde.nombre AS nombre_pde
+      FROM 
+        solicitudes_de_validacion sv
+      JOIN 
+        guias_de_estudio gde ON sv.id_gde = gde.id_gde
+      JOIN 
+        materias m ON gde.id_materia = m.id_materias
+      JOIN
+        academias aca ON m.id_academia = aca.id_academia
+      JOIN
+        planes_de_estudio pde ON m.id_pde = pde.id_pde
+      JOIN
+        usuarios us ON gde.id_usuario = us.id_usuario
+      WHERE 
+        m.id_academia = $1
+        AND sv.estado = 'E'`,
+      [id_academia]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'No hay guías en solicitud de revisión' });
+    }
+    res.json(result.rows);
+  }
+  catch (err) {
+    console.error('Error al obtener las guías en revisión', err);
+    res.status(500).json({ error: 'Error al obtener las guias en revisión' });
   }
 };
 

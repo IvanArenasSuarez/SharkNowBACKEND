@@ -253,7 +253,7 @@ export const registrarSesionEstudio = async (req, res) => {
       `, [repeticion, intervalo, facilidad, id_usuario, id_gde, id_reactivo]);
     }
 
-    // 1. Verificar cantidad total de sesiones del usuario
+    // 1. Verificar cantidad total de sesiones del usuarioAdd commentMore actions
 const { rows: totalSesionesRows } = await pool.query(`
   SELECT COUNT(*)::int AS total
   FROM "sesion_de_estudio"
@@ -301,8 +301,9 @@ if (totalSesiones === 1 || totalSesiones % 5 === 0) {
       nombre: recompensa.nombre,
       tipo: tipoNombre
     };
-
-    // Responder con la recompensa también
+    
+    
+    // Responder con la recompensa tambiénAdd commentMore actions
     return res.status(200).json({
       message: "Sesión de estudio registrada y salidas actualizadas correctamente.",
       total: respuestas.length,
