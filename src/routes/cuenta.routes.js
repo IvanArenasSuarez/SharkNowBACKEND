@@ -43,6 +43,8 @@ import {
     rechazarReporte,
     aceptarReporte,
     eliminarCuentaUsuario,
+    obtenerNotificaciones,
+    eliminarNotificacion,
 } from '../controllers/cuenta.controllers.js'
 
 const router = Router();
@@ -144,6 +146,7 @@ router.put('/reportes/aceptar', aceptarReporte);
 
 router.get('/responsable-academia/:id_academia', buscarJefeAcademia);
 
-
+router.get('/notificaciones',verifyToken, obtenerNotificaciones);
+router.delete('/eliminarnotificaciones/:id', verifyToken, eliminarNotificacion);
 
 export default router;
