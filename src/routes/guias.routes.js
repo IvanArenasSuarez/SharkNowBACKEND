@@ -14,6 +14,7 @@ import {
     aceptarValidacion,
     publicarGuia,
     enviarSolicitud,
+    obtenerEstadisticas,
 } from '../controllers/guias.controllers.js';
 import { verifyToken } from '../controllers/cuenta.controllers.js';
 
@@ -60,5 +61,8 @@ router.put('/guias/solicitudes/rechazar', verifyToken, rechazarGuiaAcademia);
 
 //Aceptar solicitud de validación
 router.post('/guias/solicitudes/aceptar', verifyToken, aceptarValidacion);
+
+//Obtener las estadisticas del usuario
+router.get('/guias/estadisticas', obtenerEstadisticas);
 
 export default router;

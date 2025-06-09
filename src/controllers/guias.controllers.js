@@ -54,7 +54,7 @@ export const guardarGuia = async (req, res) => {
         [guia.tipo, guia.nombre, guia.descripcion, userId, guia.materia, guia.plan, guia.version, guia.estado]
       );
       id_guia = result.rows[0].id_gde;
-      
+
       // 1. Contar cuántas guías ha creado el usuario
       const { rows: totalGuiasRows } = await client.query(`Add commentMore actions
         SELECT COUNT(*)::int AS total
@@ -102,7 +102,7 @@ export const guardarGuia = async (req, res) => {
           };
         }
       }
-  
+
     } else {
       // Actualizar guía existente
       await client.query(
@@ -701,5 +701,34 @@ export const aceptarValidacion = async (req, res) => {
   }
   finally {
     client.release();
+  }
+};
+
+//GET Estadisticas de las sesiones de estudio
+export const obtenerEstadisticas = async (req, res) => {
+  const { id_gde, id_usuario } = req.query;
+  try {
+    const result = await pool.query(`
+      SELECT * FROM 
+        sesion_de_estudio 
+      WHERE 
+        id_gde = $1 AND id_usuario = $2 
+    `, [id_gde, id_usuario]);
+
+    if (result.rowCount === 0) {
+      throw new Error("No se encontraron sesiones de estudio relacionadas a esta guía por el usuario");
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+
+  }
+  catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 };
