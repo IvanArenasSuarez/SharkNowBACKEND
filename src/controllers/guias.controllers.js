@@ -1,5 +1,6 @@
 import { pool } from '../db.js';
 import { verifyToken } from './cuenta.controllers.js';
+import moment from "moment";
 
 export const obtenerPreguntasDeGuia = async (req, res) => {
   const { id_guia } = req.query;
@@ -706,5 +707,57 @@ export const aceptarValidacion = async (req, res) => {
   }
   finally {
     client.release();
+  }
+};
+
+export const revisarProgresoYCrearNotificaciones = async () => {
+  const ahora = moment();
+  const hace30Min = moment().subtract(30, "minutes");
+  const diaActual = ahora.format("dddd").toLowerCase();
+
+  try {
+    const { rows: progresos } = await pool.query(`
+      SELECT id_usuario, id_gde, dias, hora
+      FROM progreso_de_guias
+    `);
+
+    for (const progreso of progresos) {
+      const { id_usuario, id_gde, dias, hora } = progreso;
+
+      let diasParsed;
+      try {
+        diasParsed = JSON.parse(dias);
+      } catch {
+        continue;
+      }
+
+      if (!Array.isArray(diasParsed) || !diasParsed.includes(diaActual)) continue;
+
+      const horaProg = moment(hora, "HH:mm").set({
+        year: ahora.year(),
+        month: ahora.month(),
+        date: ahora.date()
+      });
+
+      if (!horaProg.isValid() || horaProg.isBefore(hace30Min) || horaProg.isAfter(ahora)) continue;
+
+      await pool.query(`
+        INSERT INTO notificaciones (id_usuario, id_gde, fecha, estado, descripcion)
+        VALUES ($1, $2, CURRENT_DATE, false, $3)
+      `, [
+        id_usuario,
+        id_gde,
+        {
+          type: 1,
+          route: "/mis-guias",
+          message: "¡Es hora de estudiar tu guía!"
+        }
+      ]);
+    }
+
+    console.log(`[${ahora.format("YYYY-MM-DD HH:mm:ss")}] Notificaciones generadas.`);
+
+  } catch (err) {
+    console.error("❌ Error al generar notificaciones:", err.message);
   }
 };
