@@ -253,12 +253,65 @@ export const registrarSesionEstudio = async (req, res) => {
       `, [repeticion, intervalo, facilidad, id_usuario, id_gde, id_reactivo]);
     }
 
-    // Mensaje de confirmacion
-    res.status(200).json({
+    // 1. Verificar cantidad total de sesiones del usuarioAdd commentMore actions
+const { rows: totalSesionesRows } = await pool.query(`
+  SELECT COUNT(*)::int AS total
+  FROM "sesion_de_estudio"
+  WHERE id_usuario = $1
+`, [id_usuario]);
+
+const totalSesiones = totalSesionesRows[0].total;
+
+// 2. Verificar si se debe dar recompensa (primera vez o múltiplo de 5)
+if (totalSesiones === 1 || totalSesiones % 5 === 0) {
+  // Obtener recompensas ya asignadas al usuario
+  const { rows: usuarioRows } = await pool.query(`
+    SELECT recompensas
+    FROM usuarios
+    WHERE id_usuario = $1
+  `, [id_usuario]);
+
+  const recompensasActuales = usuarioRows[0].recompensas || [];
+
+  // Buscar recompensa aleatoria que NO tenga, de tipo 1 o 3
+  const { rows: recompensasDisponibles } = await pool.query(`
+    SELECT id_recompensa, nombre, tipo
+    FROM recompensas
+    WHERE tipo IN ('1', '3')
+      AND id_recompensa <> ALL($1::varchar[])
+  `, [recompensasActuales]);
+
+  if (recompensasDisponibles.length > 0) {
+    // Elegir aleatoriamente una
+    const recompensa = recompensasDisponibles[Math.floor(Math.random() * recompensasDisponibles.length)];
+
+    // Agregarla al usuario
+    await pool.query(`
+      UPDATE usuarios
+      SET recompensas = array_append(recompensas, $1)
+      WHERE id_usuario = $2
+    `, [recompensa.id_recompensa, id_usuario]);
+
+    // Traducir tipo numérico a cadena
+    const tipoNombre = recompensa.tipo === 1 ? 'Sombreros' : 'Marco';
+
+    // Formato de salida
+    const recompensaFormateada = {
+      id: recompensa.id_recompensa,
+      nombre: recompensa.nombre,
+      tipo: tipoNombre
+    };
+    
+    
+    // Responder con la recompensa tambiénAdd commentMore actions
+    return res.status(200).json({
       message: "Sesión de estudio registrada y salidas actualizadas correctamente.",
       total: respuestas.length,
-      correctas
+      correctas,
+      recompensa: recompensaFormateada
     });
+  }
+}
 
   } catch (error) {
     console.error("Error al registrar la sesión de estudio:", error);

@@ -1,5 +1,5 @@
 import express from 'express';
-import {PORT}from './config.js';
+import { PORT } from './config.js';
 import sm2Routes from './routes/SM2.routes.js';
 import cuentaRoutes from './routes/cuenta.routes.js';
 import guias from './routes/guias.routes.js';
@@ -20,7 +20,7 @@ app.use(sm2Routes); //algoritmo sm-2
 app.use(guias); //editar guias
 
 
-app.listen(PORT);
+app.listen(PORT, '0.0.0.0');
 console.log('Puerto escuchando en', PORT);
 
 
