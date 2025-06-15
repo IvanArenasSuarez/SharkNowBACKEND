@@ -171,13 +171,13 @@ export const obtenerGuiasCreadas = async (req, res) => {
           us.apellidos
         FROM
           guias_de_estudio gde
-        JOIN
+        LEFT JOIN
           materias m ON gde.id_materia = m.id_materias
-        JOIN
+        LEFT JOIN
           academias aca ON m.id_academia = aca.id_academia
-        JOIN
+        LEFT JOIN
           planes_de_estudio pde ON gde.id_pde = pde.id_pde
-        JOIN
+        LEFT JOIN
           usuarios us ON gde.id_usuario = us.id_usuario
         WHERE
           gde.id_usuario = $1
@@ -188,6 +188,7 @@ export const obtenerGuiasCreadas = async (req, res) => {
       return res.status(404).json({ message: 'No se encontraron guías creadas por el usuario.' });
     }
     res.json(result.rows);
+
   } catch (error) {
     console.error('Error al obtener las guías creadas:', error);
     res.status(500).json({ error: 'Error al obtener las guías creadas' });
