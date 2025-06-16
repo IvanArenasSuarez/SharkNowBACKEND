@@ -5,7 +5,7 @@ import cuentaRoutes from './routes/cuenta.routes.js';
 import guias from './routes/guias.routes.js';
 import morgan from 'morgan';
 import cors from "cors";
-
+import { iniciarNotificacionesCron } from "./tareas/notificaciones.job.js";
 
 const app = express();
 
@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cuentaRoutes);  //Cuentas y login
 app.use(sm2Routes); //algoritmo sm-2
 app.use(guias); //editar guias
-
+iniciarNotificacionesCron();
 
 app.listen(PORT, '0.0.0.0');
 console.log('Puerto escuchando en', PORT);

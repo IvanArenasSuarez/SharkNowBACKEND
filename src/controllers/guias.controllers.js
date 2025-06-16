@@ -1,5 +1,9 @@
 import { pool } from '../db.js';
 import { verifyToken } from './cuenta.controllers.js';
+import moment from "moment";
+import 'moment/locale/es.js';
+moment.locale("es");
+
 
 export const obtenerPreguntasDeGuia = async (req, res) => {
   const { id_guia } = req.query;
@@ -187,7 +191,11 @@ export const guardarGuia = async (req, res) => {
     }
 
     await client.query("COMMIT");
-    res.status(200).json({ message: "Guía guardada correctamente", id_guia });
+       const respuesta = { message: "Guía guardada correctamente", id_guia };
+    if (res.locals.recompensaNueva) {
+      respuesta.recompensa = res.locals.recompensaNueva;
+    }
+    res.status(200).json(respuesta);
 
   } catch (error) {
     await client.query("ROLLBACK");
@@ -437,7 +445,7 @@ export const obtenerParametros = async (req, res) => {
 //PUT Actualizar el estado de la guía de estudio
 export const publicarGuia = async (req, res) => {
   const { id_gde } = req.body;
-
+  const userId = req.userId;
   try {
     const result = await pool.query(`
       UPDATE
@@ -449,6 +457,11 @@ export const publicarGuia = async (req, res) => {
       RETURNING
         *;
     `, [id_gde]);
+
+    await pool.query(
+                `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
+                [userId, id_gde]
+            );
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -731,5 +744,72 @@ export const obtenerEstadisticas = async (req, res) => {
       success: false,
       error: err.message
     });
+  }
+};
+
+export const revisarProgresoYCrearNotificaciones = async () => {
+  const ahora = moment();
+  const hace30Min = moment().subtract(1, "minutes");
+  const diaActual = ahora.format("dddd").toLowerCase();
+
+  try {
+    const { rows: progresos } = await pool.query(`
+    SELECT 
+      pdg.id_usuario, 
+      pdg.id_gde, 
+      pdg.dias, 
+      pdg.hora, 
+      gde.nombre
+    FROM progreso_de_guias pdg
+    JOIN guias_de_estudio gde ON gde.id_gde = pdg.id_gde
+    `);
+
+    console.log(`Total de progresos encontrados: ${progresos.length}`);
+
+    for (const progreso of progresos) {
+      const { id_usuario, id_gde, dias, hora, nombre } = progreso;
+      // Salta si no tiene días configurados
+      if (!Array.isArray(dias)) {
+        continue;
+      }
+
+      const diasNormalizados = dias.map(d => d.toLowerCase());
+
+      if (!diasNormalizados.includes(diaActual)) {
+        console.log(`Día actual (${diaActual}) no está en`, diasNormalizados);
+        continue;
+      }
+
+      const horaProg = moment(hora, "HH:mm:ss").set({
+        year: ahora.year(),
+        month: ahora.month(),
+        date: ahora.date()
+      });
+
+      if (!horaProg.isValid()) {
+        continue;
+      }
+
+      if (horaProg.isBefore(hace30Min) || horaProg.isAfter(ahora)) {
+        continue;
+      }
+
+      const descripcion = {
+        type: 1,
+        route: "/mis-guias",
+        message: `¡Es hora de estudiar tu guía: ${nombre}!`
+      };
+
+      const { rows: notificacion } = await pool.query(`
+        INSERT INTO notificaciones (id_usuario, id_gde, fecha, estado, descripcion)
+        VALUES ($1, $2, CURRENT_DATE, false, $3)
+        RETURNING *
+      `, [id_usuario, id_gde, JSON.stringify(descripcion)]);
+    }
+
+    console.log(`[${ahora.format("YYYY-MM-DD HH:mm:ss")}] ✔ Finalizó revisión de notificaciones`);
+
+  } catch (err) {
+    console.error("Error al generar notificaciones:", err.message);
   }
 };
