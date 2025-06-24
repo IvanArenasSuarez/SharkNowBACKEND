@@ -60,7 +60,7 @@ export const guardarGuia = async (req, res) => {
       id_guia = result.rows[0].id_gde;
 
       // 1. Contar cuántas guías ha creado el usuario
-      const { rows: totalGuiasRows } = await client.query(`Add commentMore actions
+      const { rows: totalGuiasRows } = await client.query(`
         SELECT COUNT(*)::int AS total
         FROM guias_de_estudio
         WHERE id_usuario = $1
@@ -191,7 +191,7 @@ export const guardarGuia = async (req, res) => {
     }
 
     await client.query("COMMIT");
-       const respuesta = { message: "Guía guardada correctamente", id_guia };
+    const respuesta = { message: "Guía guardada correctamente", id_guia };
     if (res.locals.recompensaNueva) {
       respuesta.recompensa = res.locals.recompensaNueva;
     }
@@ -424,7 +424,7 @@ export const obtenerParametros = async (req, res) => {
           m.id_academia,
           m.id_pde
         FROM materias m`),
-      client.query('SELECT id_academia, nombre FROM academias'),
+      client.query('SELECT id_academia, nombre FROM academias WHERE id_academia != 12'),
       client.query('SELECT id_pde, nombre, anio FROM planes_de_estudio')
     ]);
 
@@ -459,9 +459,9 @@ export const publicarGuia = async (req, res) => {
     `, [id_gde]);
 
     await pool.query(
-                `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
-                [userId, id_gde]
-            );
+      `INSERT INTO progreso_de_guias (id_usuario, id_gde, estado, mesirve) VALUES ($1, $2, 'A', false)`,
+      [userId, id_gde]
+    );
 
     if (result.rowCount === 0) {
       return res.status(404).json({

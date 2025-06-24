@@ -181,7 +181,7 @@ export const actualizarContrasena = async (req, res) => {
 export const obtenerAcademias = async (req, res) => {
     try {
         const { rows } = await pool.query(
-            'SELECT * FROM academias ORDER BY nombre'
+            'SELECT * FROM academias WHERE id_academia != 12 ORDER BY nombre'
         );
         res.json(rows);
     }
